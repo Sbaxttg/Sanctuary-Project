@@ -1,29 +1,21 @@
-import { useEffect } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { clearDevBypass } from "../lib/auth";
 import { SideNavBar } from "../components/dashboard/SideNavBar";
 import { WeatherAIWidget } from "../components/weather/WeatherAIWidget";
+import {
+  WeatherApiError,
+  formatLocalDate,
+  getApiKey,
+  loadWeatherBundle,
+  loadWeatherBundleByCoords,
+  mToKm,
+  msToKmh,
+  type AirQualityData,
+  type WeatherBundle,
+} from "../lib/weatherApi";
 
-const HOURLY = [
-  { label: "12 AM", temp: "14°", active: false },
-  { label: "3 AM", temp: "13°", active: false },
-  { label: "6 AM", temp: "15°", active: true },
-  { label: "9 AM", temp: "17°", active: false },
-  { label: "12 PM", temp: "18°", active: false },
-  { label: "3 PM", temp: "17°", active: false },
-  { label: "6 PM", temp: "16°", active: false },
-  { label: "9 PM", temp: "15°", active: false },
-] as const;
-
-const WEEKLY = [
-  { day: "Tomorrow", date: "Oct 25", condition: "Sunny", low: 9, high: 16, precip: 5, icon: "sun" },
-  { day: "Wednesday", date: "Oct 26", condition: "Cloudy", low: 10, high: 15, precip: 20, icon: "cloud" },
-  { day: "Thursday", date: "Oct 27", condition: "Rain", low: 8, high: 13, precip: 65, icon: "rain" },
-  { day: "Friday", date: "Oct 28", condition: "Cloudy", low: 9, high: 14, precip: 15, icon: "cloud" },
-  { day: "Saturday", date: "Oct 29", condition: "Sunny", low: 7, high: 15, precip: 0, icon: "sun" },
-  { day: "Sunday", date: "Oct 30", condition: "Partly cloudy", low: 8, high: 14, precip: 10, icon: "partly" },
-  { day: "Monday", date: "Oct 31", condition: "Clear", low: 6, high: 13, precip: 0, icon: "sun" },
-] as const;
+const STORAGE_LAST_CITY = "sanctuary-weather-last-city";
 
 function WeatherGlyph({ type }: { type: string }) {
   if (type === "sun")
@@ -70,31 +62,212 @@ function BigCloud() {
   );
 }
 
+function AirQualityPanel({ air, compact }: { air: AirQualityData | null; compact?: boolean }) {
+  const sweep = air ? Math.round(40 + (air.gaugePercent / 100) * 280) : 0;
+  const labelColor =
+    air == null
+      ? "text-slate-500"
+      : air.aqi <= 2
+        ? "text-emerald-400"
+        : air.aqi === 3
+          ? "text-amber-400"
+          : "text-red-400";
+
+  return (
+    <section
+      className={`rounded-2xl border border-white/5 bg-[#151a21]/50 backdrop-blur-sm ${compact ? "p-6" : "p-6"}`}
+    >
+      <h3 className="text-lg font-bold tracking-tight text-white">Air quality</h3>
+      <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500">Health status</p>
+      <div className={`relative mx-auto mt-8 flex items-center justify-center ${compact ? "h-44 w-44" : "h-52 w-52"}`}>
+        <div
+          className="absolute inset-0 rounded-full p-[6px] shadow-[0_0_40px_rgba(34,211,238,0.25)]"
+          style={{
+            background: air
+              ? `conic-gradient(from 0deg, #22d3ee 0deg ${sweep}deg, rgba(30,41,59,0.9) ${sweep}deg 360deg)`
+              : "conic-gradient(from 0deg, rgba(51,65,85,0.8) 0deg 360deg)",
+          }}
+        />
+        <div className={`absolute flex flex-col items-center justify-center rounded-full bg-[#0f172a] ${compact ? "inset-2" : "inset-[10px]"}`}>
+          <span className={`${compact ? "text-5xl" : "text-6xl"} font-bold tracking-tight text-white`}>
+            {air ? Math.round(air.pm25 * 2 + air.aqi * 8) : "—"}
+          </span>
+          <span className={`mt-1 text-xs font-bold uppercase tracking-[0.2em] ${labelColor}`}>
+            {air?.label ?? "—"}
+          </span>
+        </div>
+      </div>
+      <div className="mt-8 grid grid-cols-2 gap-3">
+        <div className="rounded-xl border border-white/5 bg-[#0a0e14] p-3 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">PM2.5</p>
+          <p className="mt-1 text-lg font-bold text-white">{air ? air.pm25.toFixed(1) : "—"}</p>
+          <p className="text-[10px] text-slate-500">µg/m³</p>
+        </div>
+        <div className="rounded-xl border border-white/5 bg-[#0a0e14] p-3 text-center">
+          <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">NO2</p>
+          <p className="mt-1 text-lg font-bold text-white">{air ? air.no2.toFixed(1) : "—"}</p>
+          <p className="text-[10px] text-slate-500">µg/m³</p>
+        </div>
+      </div>
+    </section>
+  );
+}
+
+function initialSearchQuery(): string {
+  try {
+    return localStorage.getItem(STORAGE_LAST_CITY) || "London";
+  } catch {
+    return "London";
+  }
+}
+
 export function WeatherPage() {
+  const [bundle, setBundle] = useState<WeatherBundle | null>(null);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [searchDraft, setSearchDraft] = useState(() => initialSearchQuery());
+  const [geoLoading, setGeoLoading] = useState(false);
+
+  const hasKey = Boolean(getApiKey());
+
+  const runLoad = useCallback(async (fn: () => Promise<WeatherBundle>) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const b = await fn();
+      setBundle(b);
+      try {
+        localStorage.setItem(STORAGE_LAST_CITY, `${b.current.cityName}, ${b.current.country}`);
+      } catch {
+        /* ignore */
+      }
+    } catch (e) {
+      setBundle(null);
+      setError(e instanceof WeatherApiError ? e.message : "Could not load weather.");
+    } finally {
+      setLoading(false);
+      setGeoLoading(false);
+    }
+  }, []);
+
   useEffect(() => {
     document.title = "Sanctuary — Weather";
   }, []);
+
+  useEffect(() => {
+    const q = searchDraft.trim() || "London";
+    if (hasKey) {
+      void runLoad(() => loadWeatherBundle(q));
+    } else {
+      setError("Add VITE_OPENWEATHER_API_KEY to your .env file (see .env.example).");
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load / API key only
+  }, [hasKey]);
+
+  const onSearch = () => {
+    const q = searchDraft.trim();
+    if (!q || !hasKey) return;
+    void runLoad(() => loadWeatherBundle(q));
+  };
+
+  const onUseLocation = () => {
+    if (!hasKey) return;
+    if (!navigator.geolocation) {
+      setError("Geolocation is not supported in this browser.");
+      return;
+    }
+    setGeoLoading(true);
+    setError(null);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        void runLoad(() => loadWeatherBundleByCoords(pos.coords.latitude, pos.coords.longitude));
+      },
+      (err) => {
+        setGeoLoading(false);
+        setError(err.message || "Could not read your location.");
+      },
+      { enableHighAccuracy: true, timeout: 15_000 },
+    );
+  };
+
+  const conciergeContext = useMemo(() => {
+    if (!bundle) return null;
+    return {
+      cityName: `${bundle.current.cityName}, ${bundle.current.country}`,
+      tempC: bundle.current.tempC,
+      feelsLikeC: bundle.current.feelsLikeC,
+      description: bundle.current.description,
+      windKmh: msToKmh(bundle.current.windSpeedMs),
+      humidity: bundle.current.humidity,
+    };
+  }, [bundle]);
+
+  const hourlyBars = useMemo(() => {
+    if (!bundle?.hourly.length) return [];
+    const temps = bundle.hourly.map((h) => h.tempC);
+    const minT = Math.min(...temps);
+    const maxT = Math.max(...temps);
+    const span = Math.max(1, maxT - minT);
+    return bundle.hourly.map((h) => ({
+      ...h,
+      heightPct: 25 + ((h.tempC - minT) / span) * 65,
+    }));
+  }, [bundle]);
+
+  const weeklyRange = useMemo(() => {
+    if (!bundle?.daily.length) return { min: 0, max: 30 };
+    const lows = bundle.daily.map((d) => d.low);
+    const highs = bundle.daily.map((d) => d.high);
+    return {
+      min: Math.min(...lows) - 2,
+      max: Math.max(...highs) + 2,
+    };
+  }, [bundle]);
 
   return (
     <div className="min-h-screen bg-[#0a0e14] font-sans text-slate-100 antialiased">
       <SideNavBar />
 
       <div className="flex min-h-screen pl-64">
-        {/* Pane 2 — main */}
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-6 border-b border-white/5 bg-[#0a0e14]/90 px-8 backdrop-blur-xl">
+          <header className="sticky top-0 z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-[#0a0e14]/90 px-4 py-3 backdrop-blur-xl md:px-8">
             <h1 className="text-2xl font-bold tracking-tight text-white">Weather Hub</h1>
-            <div className="flex flex-1 items-center justify-end gap-4">
-              <div className="hidden max-w-xs flex-1 items-center gap-3 rounded-xl border border-white/10 bg-[#0c1016] px-4 py-2 md:flex">
-                <svg className="h-4 w-4 shrink-0 text-slate-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
-                </svg>
+            <div className="flex w-full flex-1 flex-wrap items-center justify-end gap-2 md:gap-4 lg:max-w-2xl">
+              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/10 bg-[#0c1016] px-3 py-2 md:px-4">
+                <button
+                  type="button"
+                  onClick={onSearch}
+                  disabled={loading || !hasKey}
+                  className="shrink-0 rounded-lg p-1 text-slate-500 hover:bg-white/5 hover:text-white disabled:opacity-40"
+                  aria-label="Search"
+                >
+                  <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z" />
+                  </svg>
+                </button>
                 <input
                   type="search"
-                  placeholder="Search city..."
+                  value={searchDraft}
+                  onChange={(e) => setSearchDraft(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") {
+                      e.preventDefault();
+                      onSearch();
+                    }
+                  }}
+                  placeholder="City or ZIP (US)…"
                   className="min-w-0 flex-1 bg-transparent text-sm font-medium text-white placeholder:text-slate-500 outline-none"
+                  disabled={loading}
                 />
               </div>
+              <button
+                type="button"
+                onClick={onUseLocation}
+                disabled={geoLoading || loading || !hasKey}
+                className="shrink-0 rounded-full border border-app-primary/40 bg-app-primary/15 px-3 py-2 text-xs font-bold uppercase tracking-wider text-app-primary transition hover:bg-app-primary/25 disabled:opacity-40"
+              >
+                {geoLoading ? "Locating…" : "Use my location"}
+              </button>
               <button type="button" className="rounded-xl p-2.5 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Notifications">
                 <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
@@ -109,26 +282,45 @@ export function WeatherPage() {
             </div>
           </header>
 
+          {error && (
+            <div className="border-b border-amber-500/30 bg-amber-500/10 px-8 py-3 text-sm text-amber-100/90">{error}</div>
+          )}
+          {loading && (
+            <div className="border-b border-white/5 px-8 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+              Loading forecast…
+            </div>
+          )}
+
           <div className="space-y-8 p-8 pb-24">
-            {/* Hero */}
             <section className="overflow-hidden rounded-[2rem] border border-white/5 bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-8 shadow-deep md:p-10">
               <div className="mb-6 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
-                Current sanctuary
+                Live conditions
               </div>
               <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-5xl font-bold tracking-tight text-white md:text-6xl">London, UK</h2>
-                  <p className="mt-3 text-xl font-semibold text-slate-400">Monday, 24th October</p>
-                  <p
-                    className="mt-4 font-bold leading-none tracking-tighter text-white"
-                    style={{ fontSize: "clamp(5rem, 14vw, 10rem)" }}
-                  >
-                    18°C
+                  <h2 className="text-5xl font-bold tracking-tight text-white md:text-6xl">
+                    {bundle ? `${bundle.current.cityName}, ${bundle.current.country}` : "—"}
+                  </h2>
+                  <p className="mt-3 text-xl font-semibold text-slate-400">
+                    {bundle ? formatLocalDate(bundle.current.dt, bundle.current.timezone) : "Search a city to begin"}
+                  </p>
+                  <p className="mt-2 text-9xl font-bold leading-none tracking-tighter text-white md:text-[10rem]">
+                    {bundle ? `${Math.round(bundle.current.tempC)}°C` : "—"}
                   </p>
                 </div>
                 <div className="flex flex-col items-center lg:items-end">
-                  <BigCloud />
-                  <p className="mt-4 text-lg font-semibold text-slate-300">Partly Cloudy</p>
+                  {bundle ? (
+                    <img
+                      src={`https://openweathermap.org/img/wn/${bundle.current.iconCode}@4x.png`}
+                      alt=""
+                      className="h-32 w-32 object-contain md:h-40 md:w-40"
+                    />
+                  ) : (
+                    <BigCloud />
+                  )}
+                  <p className="mt-4 text-center text-lg font-semibold capitalize text-slate-300 lg:text-right">
+                    {bundle?.current.description ?? "—"}
+                  </p>
                 </div>
               </div>
               <div className="mt-10 grid grid-cols-3 gap-6 border-t border-white/10 pt-8">
@@ -136,152 +328,120 @@ export function WeatherPage() {
                   <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                     <span className="text-sky-400">◇</span> Wind
                   </p>
-                  <p className="mt-2 text-lg font-bold text-sky-100">12 km/h</p>
+                  <p className="mt-2 text-lg font-bold text-sky-100">
+                    {bundle ? `${msToKmh(bundle.current.windSpeedMs)} km/h` : "—"}
+                  </p>
                 </div>
                 <div>
                   <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                     <span className="text-cyan-400">◆</span> Humidity
                   </p>
-                  <p className="mt-2 text-lg font-bold text-cyan-100">64%</p>
+                  <p className="mt-2 text-lg font-bold text-cyan-100">{bundle ? `${bundle.current.humidity}%` : "—"}</p>
                 </div>
                 <div>
                   <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                     <span className="text-indigo-400">◎</span> Visibility
                   </p>
-                  <p className="mt-2 text-lg font-bold text-indigo-100">10 km</p>
+                  <p className="mt-2 text-lg font-bold text-indigo-100">
+                    {bundle ? `${mToKm(bundle.current.visibilityM)} km` : "—"}
+                  </p>
                 </div>
               </div>
             </section>
 
-            {/* Hourly */}
             <section>
               <h3 className="text-xl font-bold tracking-tight text-white">Hourly temperature</h3>
+              <p className="mt-1 text-xs text-slate-500">Next ~24h from forecast (3-hour steps)</p>
               <div className="mt-6 flex items-end justify-between gap-2 overflow-x-auto pb-2">
-                {HOURLY.map((h) => (
-                  <div key={h.label} className="flex min-w-[52px] flex-col items-center gap-3">
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{h.label}</span>
-                    <div
-                      className={
-                        h.active
-                          ? "h-28 w-8 rounded-full bg-gradient-to-t from-[#2962FF] to-[#94aaff] shadow-[0_0_24px_rgba(41,98,255,0.5)]"
-                          : "h-28 w-8 rounded-full bg-[#1e293b]"
-                      }
-                    />
-                    <span className="text-sm font-bold text-slate-300">{h.temp}</span>
-                  </div>
-                ))}
+                {hourlyBars.length === 0 ? (
+                  <p className="text-sm text-slate-500">Load weather to see hourly bars.</p>
+                ) : (
+                  hourlyBars.map((h) => (
+                    <div key={h.label} className="flex min-w-[52px] flex-col items-center gap-3">
+                      <span className="text-[10px] font-bold uppercase tracking-wider text-slate-500">{h.label}</span>
+                      <div
+                        className={
+                          h.isNow
+                            ? "w-8 rounded-full bg-gradient-to-t from-[#2962FF] to-[#94aaff] shadow-[0_0_24px_rgba(41,98,255,0.5)]"
+                            : "w-8 rounded-full bg-[#1e293b]"
+                        }
+                        style={{ height: `${Math.max(28, (h.heightPct / 100) * 112)}px` }}
+                      />
+                      <span className="text-sm font-bold text-slate-300">{Math.round(h.tempC)}°</span>
+                    </div>
+                  ))
+                )}
               </div>
             </section>
 
-            {/* Weekly */}
             <section>
               <div className="mb-6">
                 <h3 className="text-xl font-bold tracking-tight text-white">Weekly forecast</h3>
                 <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500">
-                  7-day trend analysis
+                  7-day trend (from 5-day / 3-hour API)
                 </p>
               </div>
               <ul className="space-y-3">
-                {WEEKLY.map((row) => {
-                  const minT = 5;
-                  const maxT = 20;
-                  const left = ((row.low - minT) / (maxT - minT)) * 100;
-                  const width = ((row.high - row.low) / (maxT - minT)) * 100;
-                  return (
-                    <li
-                      key={row.day}
-                      className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-[#151a21]/50 p-6 lg:flex-row lg:items-center lg:gap-6"
-                    >
-                      <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
-                        <div>
-                          <p className="font-bold text-white">{row.day}</p>
-                          <p className="text-xs text-slate-500">{row.date}</p>
+                {bundle?.daily.length ? (
+                  bundle.daily.map((row) => {
+                    const { min, max } = weeklyRange;
+                    const span = Math.max(1, max - min);
+                    const left = ((row.low - min) / span) * 100;
+                    const width = ((row.high - row.low) / span) * 100;
+                    return (
+                      <li
+                        key={`${row.dayLabel}-${row.dateLabel}`}
+                        className="flex flex-col gap-4 rounded-2xl border border-white/5 bg-[#151a21]/50 p-6 lg:flex-row lg:items-center lg:gap-6"
+                      >
+                        <div className="flex min-w-0 flex-1 flex-wrap items-center gap-4">
+                          <div>
+                            <p className="font-bold text-white">{row.dayLabel}</p>
+                            <p className="text-xs text-slate-500">{row.dateLabel}</p>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <WeatherGlyph type={row.icon} />
+                            <span className="text-sm text-slate-400">{row.condition}</span>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <WeatherGlyph type={row.icon} />
-                          <span className="text-sm text-slate-400">{row.condition}</span>
+                        <div className="flex flex-wrap items-center gap-4 lg:flex-1">
+                          <span className="w-8 text-sm font-bold text-slate-400">{row.low}°</span>
+                          <div className="relative h-3 min-w-[140px] flex-1 rounded-full bg-[#0a0e14]">
+                            <div
+                              className="absolute inset-y-0 rounded-full bg-gradient-to-r from-[#2962FF] to-[#94aaff] opacity-90"
+                              style={{ left: `${left}%`, width: `${Math.max(8, width)}%` }}
+                            />
+                          </div>
+                          <span className="w-8 text-sm font-bold text-white">{row.high}°</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                            <svg className="h-3 w-3 text-sky-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
+                              <path d="M12 2c-5 8-8 10-8 14a8 8 0 1016 0c0-4-3-6-8-14z" />
+                            </svg>
+                            {row.precipChance}% precip
+                          </span>
                         </div>
-                      </div>
-                      <div className="flex flex-wrap items-center gap-4 lg:flex-1">
-                        <span className="w-8 text-sm font-bold text-slate-400">{row.low}°</span>
-                        <div className="relative h-3 min-w-[140px] flex-1 rounded-full bg-[#0a0e14]">
-                          <div
-                            className="absolute inset-y-0 rounded-full bg-gradient-to-r from-[#2962FF] to-[#94aaff] opacity-90"
-                            style={{ left: `${left}%`, width: `${Math.max(8, width)}%` }}
-                          />
-                        </div>
-                        <span className="w-8 text-sm font-bold text-white">{row.high}°</span>
-                        <span className="inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                          <svg className="h-3 w-3 text-sky-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
-                            <path d="M12 2c-5 8-8 10-8 14a8 8 0 1016 0c0-4-3-6-8-14z" />
-                          </svg>
-                          {row.precip}% precip
-                        </span>
-                      </div>
-                    </li>
-                  );
-                })}
+                      </li>
+                    );
+                  })
+                ) : (
+                  <li className="rounded-2xl border border-dashed border-white/10 p-8 text-center text-sm text-slate-500">
+                    No multi-day data yet — check API key and search.
+                  </li>
+                )}
               </ul>
             </section>
           </div>
         </div>
 
-        {/* Pane 3 — metrics + AI */}
         <aside className="hidden w-80 shrink-0 flex-col gap-8 border-l border-white/5 bg-[#0a0e14] p-8 xl:flex">
-          <section className="rounded-2xl border border-white/5 bg-[#151a21]/50 p-6 backdrop-blur-sm">
-            <h3 className="text-lg font-bold tracking-tight text-white">Air quality</h3>
-            <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500">Health status</p>
-            <div className="relative mx-auto mt-8 flex h-52 w-52 items-center justify-center">
-              <div
-                className="absolute inset-0 rounded-full p-[6px] shadow-[0_0_40px_rgba(34,211,238,0.25)]"
-                style={{
-                  background:
-                    "conic-gradient(from 0deg, #22d3ee 0deg 151deg, rgba(30,41,59,0.9) 151deg 360deg)",
-                }}
-              />
-              <div className="absolute inset-[10px] flex flex-col items-center justify-center rounded-full bg-[#0f172a]">
-                <span className="text-6xl font-bold tracking-tight text-white">42</span>
-                <span className="mt-1 text-xs font-bold uppercase tracking-[0.2em] text-emerald-400">Good</span>
-              </div>
-            </div>
-            <div className="mt-8 grid grid-cols-2 gap-3">
-              <div className="rounded-xl border border-white/5 bg-[#0a0e14] p-3 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">PM2.5</p>
-                <p className="mt-1 text-lg font-bold text-white">12</p>
-                <p className="text-[10px] text-slate-500">µg/m³</p>
-              </div>
-              <div className="rounded-xl border border-white/5 bg-[#0a0e14] p-3 text-center">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-slate-500">NO2</p>
-                <p className="mt-1 text-lg font-bold text-white">18</p>
-                <p className="text-[10px] text-slate-500">ppb</p>
-              </div>
-            </div>
-          </section>
-
-          <WeatherAIWidget />
+          <AirQualityPanel air={bundle?.air ?? null} />
+          <WeatherAIWidget weather={conciergeContext} />
         </aside>
       </div>
 
-      {/* Mobile: stack AI below — show air + AI in scroll on small screens */}
       <div className="border-t border-white/5 bg-[#0a0e14] p-8 xl:hidden">
-        <section className="mx-auto max-w-md rounded-2xl border border-white/5 bg-[#151a21]/50 p-6">
-          <h3 className="text-lg font-bold tracking-tight text-white">Air quality</h3>
-          <p className="mt-1 text-[10px] font-bold uppercase tracking-[0.25em] text-slate-500">Health status</p>
-          <div className="relative mx-auto mt-6 flex h-44 w-44 items-center justify-center">
-            <div
-              className="absolute inset-0 rounded-full p-1"
-              style={{
-                background: "conic-gradient(from 0deg, #22d3ee 0deg 151deg, rgba(30,41,59,0.9) 151deg 360deg)",
-              }}
-            />
-            <div className="absolute inset-2 flex flex-col items-center justify-center rounded-full bg-[#0f172a]">
-              <span className="text-5xl font-bold text-white">42</span>
-              <span className="text-xs font-bold uppercase tracking-[0.2em] text-emerald-400">Good</span>
-            </div>
-          </div>
-        </section>
+        <AirQualityPanel air={bundle?.air ?? null} compact />
         <div className="mx-auto mt-6 max-w-md">
-          <WeatherAIWidget />
+          <WeatherAIWidget weather={conciergeContext} />
         </div>
       </div>
 

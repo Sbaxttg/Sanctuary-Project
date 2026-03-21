@@ -1,3 +1,5 @@
+import { useEffect, useRef, useState } from "react";
+
 function SparkleIcon() {
   return (
     <svg className="h-5 w-5 text-sky-300" viewBox="0 0 24 24" fill="currentColor" aria-hidden>
@@ -6,14 +8,87 @@ function SparkleIcon() {
   );
 }
 
-/** Glass concierge card for the Weather page right column */
-export function WeatherAIWidget() {
+export type WeatherConciergeContext = {
+  cityName: string;
+  tempC: number;
+  feelsLikeC: number;
+  description: string;
+  windKmh: number;
+  humidity: number;
+} | null;
+
+function buildSmartSuggestion(ctx: NonNullable<WeatherConciergeContext>): string {
+  const t = ctx.tempC;
+  const desc = ctx.description.toLowerCase();
+  const wind = ctx.windKmh;
+  const hum = ctx.humidity;
+
+  if (t < 0) {
+    return `Sub-freezing: insulated jacket, gloves, and traction-aware footwear. Wind ${wind} km/h — cover exposed skin.`;
+  }
+  if (t < 8) {
+    return `Optimal attire: warm coat, light layers, and a scarf if wind picks up (${wind} km/h).`;
+  }
+  if (t < 16) {
+    return `Light jacket or breathable layers. ${hum}% humidity — comfortable for brisk walks or easy runs.`;
+  }
+  if (t < 26) {
+    if (desc.includes("rain") || desc.includes("drizzle")) {
+      return `Mild with wet conditions — bring a breathable waterproof shell and quick-dry base layer.`;
+    }
+    return `Optimal attire: breathable top + optional light layer. Great window for outdoor training.`;
+  }
+  return `Heat: light fabrics, sun protection, and steady hydration (${hum}% humidity). Prefer shade during peak sun.`;
+}
+
+function buildIntroLine(ctx: NonNullable<WeatherConciergeContext>): string {
+  const place = ctx.cityName;
+  const t = Math.round(ctx.tempC);
+  const desc = ctx.description.replace(/\b\w/g, (c) => c.toUpperCase());
+  return `${place}: ${t}°C and ${desc}. Wind ${ctx.windKmh} km/h — here’s a quick take on what to wear.`;
+}
+
+export function WeatherAIWidget({ weather }: { weather: WeatherConciergeContext }) {
+  const [chatInput, setChatInput] = useState("");
+  const [lines, setLines] = useState<{ role: "user" | "ai"; text: string }[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    scrollRef.current?.scrollTo(0, scrollRef.current.scrollHeight);
+  }, [lines]);
+
+  const suggestion = weather ? buildSmartSuggestion(weather) : "";
+  const intro = weather ? buildIntroLine(weather) : "";
+  const bestWindow =
+    weather && weather.tempC >= 5 && weather.tempC < 28
+      ? "Aim for mid-morning or early evening when light is softer and wind is often calmer."
+      : "Adjust outdoor time to avoid peak heat or wind chill depending on your comfort zone.";
+
+  function sendChat() {
+    const text = chatInput.trim();
+    if (!text) return;
+    setLines((prev) => [...prev, { role: "user", text }]);
+    setChatInput("");
+    setTimeout(() => {
+      setLines((prev) => [
+        ...prev,
+        {
+          role: "ai",
+          text:
+            weather?.cityName
+              ? `Noted for ${weather.cityName}. Connect an LLM API here to answer: “${text.slice(0, 80)}${text.length > 80 ? "…" : ""}”`
+              : "Search for a location first — then wire this to your concierge API.",
+        },
+      ]);
+    }, 350);
+  }
+
   return (
     <div
-      className="flex flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#151a21]/80 shadow-[0px_32px_64px_rgba(0,0,0,0.6)] backdrop-blur-2xl"
+      className="flex max-h-[min(70vh,560px)] flex-col overflow-hidden rounded-3xl border border-white/10 bg-[#151a21]/80 shadow-[0px_32px_64px_rgba(0,0,0,0.6)] backdrop-blur-2xl"
       aria-label="AI Sanctuary weather concierge"
     >
-      <div className="flex items-start justify-between border-b border-white/10 px-5 py-4">
+      <div className="flex shrink-0 items-start justify-between border-b border-white/10 px-5 py-4">
         <div className="flex items-center gap-2">
           <SparkleIcon />
           <div>
@@ -34,29 +109,51 @@ export function WeatherAIWidget() {
         </button>
       </div>
 
-      <div className="space-y-4 px-5 py-4 text-sm leading-relaxed text-slate-300">
-        <p>
-          Good morning, Alex — it&apos;s mild with a light breeze. Perfect for a brisk walk or an
-          easy tempo run before noon.
-        </p>
-        <div className="rounded-2xl border border-app-primary/40 bg-app-primary/5 p-4">
-          <p className="text-[13px] font-semibold text-sky-100">
-            Light layers + breathable shell. Best run window:{" "}
-            <span className="text-white">9:00 – 10:30 AM</span> when humidity dips.
-          </p>
-        </div>
+      <div ref={scrollRef} className="min-h-0 flex-1 space-y-4 overflow-y-auto px-5 py-4 text-sm leading-relaxed text-slate-300">
+        {!weather ? (
+          <p className="text-slate-500">Load weather by searching a city or using your location.</p>
+        ) : (
+          <>
+            <p>{intro}</p>
+            <div className="rounded-2xl border border-app-primary/40 bg-app-primary/5 p-4">
+              <p className="text-[10px] font-bold uppercase tracking-[0.2em] text-sky-300/90">Smart suggestion</p>
+              <p className="mt-2 text-[13px] font-semibold text-sky-100">{suggestion}</p>
+              <p className="mt-3 text-xs text-slate-400">{bestWindow}</p>
+            </div>
+            {lines.map((line, i) =>
+              line.role === "user" ? (
+                <p key={i} className="rounded-xl border border-white/10 bg-black/30 px-4 py-3 text-[13px] text-slate-200">
+                  {line.text}
+                </p>
+              ) : (
+                <p key={i} className="text-[13px] text-slate-400">
+                  {line.text}
+                </p>
+              ),
+            )}
+          </>
+        )}
       </div>
 
-      <div className="border-t border-white/10 p-4">
+      <div className="shrink-0 border-t border-white/10 p-4">
         <div className="flex gap-2 rounded-2xl border border-white/10 bg-black/30 px-3 py-2.5">
           <input
             type="text"
+            value={chatInput}
+            onChange={(e) => setChatInput(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") {
+                e.preventDefault();
+                sendChat();
+              }
+            }}
             placeholder="Ask about activities or gear..."
             className="min-w-0 flex-1 bg-transparent text-sm font-medium text-white placeholder:text-slate-500 outline-none"
           />
           <button
             type="button"
-            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-primary text-white shadow-[0_0_20px_rgba(41,98,255,0.45)]"
+            onClick={sendChat}
+            className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full bg-app-primary text-white shadow-[0_0_20px_rgba(41,98,255,0.45)] transition hover:brightness-110"
             aria-label="Send"
           >
             <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

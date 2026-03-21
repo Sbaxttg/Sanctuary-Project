@@ -39,6 +39,29 @@ Open the URL shown in the terminal (usually `http://localhost:5173`).
    npm install
    ```
 
+### Weather page (OpenWeatherMap)
+
+1. Create a free API key at [openweathermap.org/api](https://openweathermap.org/api).
+2. Copy `.env.example` to `.env` and set:
+
+   ```bash
+   VITE_OPENWEATHER_API_KEY=your_key_here
+   ```
+
+3. Restart `npm run dev`. Search by **city** or **US ZIP**; use **Use my location** for GPS-based weather.
+
+### Email page (Gmail sync)
+
+1. In [Google Cloud Console](https://console.cloud.google.com/), create a project (or pick one), enable **Gmail API**, and create **OAuth 2.0 Client ID** credentials of type **Web application**.
+2. Under **Authorized JavaScript origins**, add your dev origin (e.g. `http://localhost:5173`) and any deployed URL.
+3. Copy `.env.example` to `.env` and set:
+
+   ```bash
+   VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
+   ```
+
+4. Restart `npm run dev`. On **Email**, click **Sync Gmail** to sign in with Google and load messages. **Compose** opens a modal; **Archive / Delete / Spam / Star** call the Gmail API when a message is selected.
+
 ### Build
 
 ```bash

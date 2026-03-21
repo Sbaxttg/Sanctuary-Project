@@ -1,4 +1,6 @@
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+
+export type ChatMessage = { id: string; role: "coach" | "user"; text: string };
 
 function BotIcon() {
   return (
@@ -8,18 +10,54 @@ function BotIcon() {
   );
 }
 
+const INITIAL_MESSAGES: ChatMessage[] = [
+  {
+    id: "welcome",
+    role: "coach",
+    text: "Your recovery score is strong — when you log goals and sessions, I can tailor suggestions. Ask me anything when you're ready to connect an LLM.",
+  },
+];
+
 export function FitnessAICoach() {
   const [open, setOpen] = useState(true);
+  const [input, setInput] = useState("");
+  const [messages, setMessages] = useState<ChatMessage[]>(INITIAL_MESSAGES);
+  const scrollRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const el = scrollRef.current;
+    if (!el) return;
+    el.scrollTop = el.scrollHeight;
+  }, [messages, open]);
+
+  function send() {
+    const text = input.trim();
+    if (!text) return;
+    const userMsg: ChatMessage = { id: `u-${Date.now()}`, role: "user", text };
+    setMessages((prev) => [...prev, userMsg]);
+    setInput("");
+    // Placeholder echo — swap for fetch() to your LLM API
+    setTimeout(() => {
+      setMessages((prev) => [
+        ...prev,
+        {
+          id: `c-${Date.now()}`,
+          role: "coach",
+          text: "Message received — wire this widget to your API to get live coaching responses.",
+        },
+      ]);
+    }, 400);
+  }
 
   return (
     <>
       {open && (
         <div
-          className="fixed bottom-24 right-8 z-40 w-80 max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-white/10 bg-[#151a21]/80 shadow-[0px_32px_64px_rgba(0,0,0,0.55)] backdrop-blur-xl"
+          className="fixed bottom-24 right-8 z-40 flex max-h-[min(70vh,520px)] w-80 max-w-[calc(100vw-2rem)] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#151a21]/80 shadow-[0px_32px_64px_rgba(0,0,0,0.55)] backdrop-blur-xl"
           role="dialog"
           aria-label="AI Coach"
         >
-          <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
+          <div className="flex shrink-0 items-center justify-between border-b border-white/10 px-4 py-3">
             <p className="text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400">AI Coach</p>
             <button
               type="button"
@@ -32,25 +70,53 @@ export function FitnessAICoach() {
               </svg>
             </button>
           </div>
-          <div className="flex gap-3 px-4 py-4">
-            <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-app-primary/20">
-              <BotIcon />
-            </div>
-            <div className="rounded-2xl rounded-tl-sm border border-white/10 bg-black/30 px-4 py-3 text-[13px] leading-relaxed text-slate-300">
-              Your recovery score is strong — consider adding 5 lbs to working sets on squats this week if
-              form stays crisp. Hydrate before leg day.
-            </div>
+
+          <div
+            ref={scrollRef}
+            className="min-h-0 flex-1 space-y-4 overflow-y-auto px-4 py-4"
+            role="log"
+            aria-live="polite"
+          >
+            {messages.map((m) =>
+              m.role === "coach" ? (
+                <div key={m.id} className="flex gap-3">
+                  <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full bg-app-primary/20">
+                    <BotIcon />
+                  </div>
+                  <div className="rounded-2xl rounded-tl-sm border border-white/10 bg-black/30 px-4 py-3 text-[13px] leading-relaxed text-slate-300">
+                    {m.text}
+                  </div>
+                </div>
+              ) : (
+                <div key={m.id} className="flex justify-end">
+                  <div className="max-w-[85%] rounded-2xl rounded-tr-sm border border-app-primary/30 bg-app-primary/15 px-4 py-3 text-[13px] leading-relaxed text-slate-100">
+                    {m.text}
+                  </div>
+                </div>
+              ),
+            )}
           </div>
-          <div className="border-t border-white/10 p-4">
+
+          <div className="shrink-0 border-t border-white/10 p-4">
             <div className="flex gap-2 rounded-xl border border-white/10 bg-[#0a0e14] px-3 py-2.5">
               <input
                 type="text"
+                value={input}
+                onChange={(e) => setInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter") {
+                    e.preventDefault();
+                    send();
+                  }
+                }}
                 placeholder="Ask your coach..."
                 className="min-w-0 flex-1 bg-transparent text-sm font-medium text-white placeholder:text-slate-500 outline-none"
+                aria-label="Message to coach"
               />
               <button
                 type="button"
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-app-primary text-white"
+                onClick={send}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-app-primary text-white transition hover:brightness-110"
                 aria-label="Send"
               >
                 <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">

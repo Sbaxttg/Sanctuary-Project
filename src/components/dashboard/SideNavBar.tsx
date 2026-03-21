@@ -59,6 +59,15 @@ const calendarNavClass = (isActive: boolean) =>
       : "border-transparent text-slate-400 hover:bg-white/[0.04] hover:text-slate-200",
   ].join(" ");
 
+/** Active state for Fitness page — right accent bar per design system */
+const fitnessNavClass = (isActive: boolean) =>
+  [
+    "group relative flex w-full items-center gap-3 rounded-xl py-3 pl-3 pr-4 text-left text-[14px] font-semibold transition-colors",
+    isActive
+      ? "border-r-2 border-[#2962FF] bg-[#151a21] text-white shadow-[inset_0_0_0_1px_rgba(255,255,255,0.04)]"
+      : "text-slate-400 hover:bg-white/[0.04] hover:text-slate-200",
+  ].join(" ");
+
 export function SideNavBar() {
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-64 flex-col border-r border-white/5 bg-[#0f141a]">
@@ -137,17 +146,13 @@ export function SideNavBar() {
           )}
         </NavLink>
 
-        <NavLink to="/fitness" className={({ isActive }) => navItemClass(isActive)}>
+        <NavLink to="/fitness" className={({ isActive }) => fitnessNavClass(isActive)}>
           {({ isActive }) => (
             <>
-              <FitnessIcon />
+              <span className={isActive ? "text-[#2962FF]" : ""}>
+                <FitnessIcon />
+              </span>
               <span>Fitness</span>
-              {isActive && (
-                <span
-                  className="absolute right-2 top-1/2 h-8 w-0.5 -translate-y-1/2 rounded-full bg-app-primary shadow-[0_0_12px_rgba(41,98,255,0.7)]"
-                  aria-hidden
-                />
-              )}
             </>
           )}
         </NavLink>

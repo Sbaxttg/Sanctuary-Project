@@ -17,6 +17,7 @@ export default {
       },
       fontFamily: {
         sans: ["Manrope", "system-ui", "sans-serif"],
+        manrope: ["Manrope", "system-ui", "sans-serif"],
         serif: ['"Playfair Display"', "Georgia", "serif"],
       },
       boxShadow: {

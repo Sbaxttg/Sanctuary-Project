@@ -1,8 +1,12 @@
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { clearDevBypass } from "../lib/auth";
-import { DashboardAIWidget } from "../components/dashboard/DashboardAIWidget";
+import { DashboardAIWidget, type DashboardChatMessage } from "../components/dashboard/DashboardAIWidget";
 import { SideNavBar } from "../components/dashboard/SideNavBar";
+import { MOTIVATIONAL_QUOTES, type MotivationalQuote } from "../data/motivationalQuotes";
+import { pickUniqueRandomQuotes } from "../lib/quotePicker";
+
+const QUOTE_GRID_SLOTS = 5;
 
 function ordinalDay(n: number): string {
   const s = ["th", "st", "nd", "rd"];
@@ -38,26 +42,33 @@ function formatLongDate(d: Date): string {
   return `${days[d.getDay()]}, ${months[d.getMonth()]} ${ordinalDay(d.getDate())}`;
 }
 
-function dayOfYear365(): number {
-  const now = new Date();
-  const start = new Date(now.getFullYear(), 0, 0);
-  const diff = now.getTime() - start.getTime();
-  return Math.min(365, Math.floor(diff / (1000 * 60 * 60 * 24)));
+function isLeapYear(y: number): boolean {
+  return (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
 }
 
-function useNow() {
+function daysInYear(year: number): number {
+  return isLeapYear(year) ? 366 : 365;
+}
+
+function getDayOfYear(date: Date): number {
+  const start = new Date(date.getFullYear(), 0, 0);
+  const diff = date.getTime() - start.getTime();
+  return Math.floor(diff / (1000 * 60 * 60 * 24));
+}
+
+function useNowTick(everyMs: number) {
   const [now, setNow] = useState(() => new Date());
   useEffect(() => {
-    const t = setInterval(() => setNow(new Date()), 1000);
-    return () => clearInterval(t);
-  }, []);
+    const t = window.setInterval(() => setNow(new Date()), everyMs);
+    return () => window.clearInterval(t);
+  }, [everyMs]);
   return now;
 }
 
 function LargeQuoteDecoration() {
   return (
     <span
-      className="mb-8 block text-center font-serif text-[4.5rem] font-light leading-none text-app-accent-soft/35"
+      className="mb-8 block text-center font-serif text-[4.5rem] font-light leading-none text-[#94aaff]/35"
       aria-hidden
     >
       &ldquo;
@@ -65,9 +76,119 @@ function LargeQuoteDecoration() {
   );
 }
 
+function QuoteCardActions({
+  onFavorite,
+  onShare,
+}: {
+  onFavorite: () => void;
+  onShare: () => void;
+}) {
+  return (
+    <div className="absolute right-4 top-4 flex gap-1">
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onFavorite();
+        }}
+        className="rounded-lg p-2 text-slate-500 transition hover:bg-white/10 hover:text-[#2962FF]"
+        aria-label="Favorite quote"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z"
+          />
+        </svg>
+      </button>
+      <button
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          onShare();
+        }}
+        className="rounded-lg p-2 text-slate-500 transition hover:bg-white/10 hover:text-[#2962FF]"
+        aria-label="Share quote"
+      >
+        <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={1.5}
+            d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.367-2.684z"
+          />
+        </svg>
+      </button>
+    </div>
+  );
+}
+
 export function HomePage() {
-  const now = useNow();
-  const day = dayOfYear365();
+  const now = useNowTick(1000);
+  const dayOfYear = getDayOfYear(now);
+  const totalDays = daysInYear(now.getFullYear());
+  const progressPct = Math.min(
+    100,
+    Math.round((dayOfYear / Math.max(1, totalDays)) * 100),
+  );
+
+  const [gridQuotes, setGridQuotes] = useState<MotivationalQuote[]>(() =>
+    pickUniqueRandomQuotes(MOTIVATIONAL_QUOTES, QUOTE_GRID_SLOTS),
+  );
+  const [aiMessages, setAiMessages] = useState<DashboardChatMessage[]>([]);
+  const [toast, setToast] = useState<string | null>(null);
+  const [notificationsOpen, setNotificationsOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  const refreshQuotes = useCallback(() => {
+    setGridQuotes(pickUniqueRandomQuotes(MOTIVATIONAL_QUOTES, QUOTE_GRID_SLOTS));
+  }, []);
+
+  const showToast = useCallback((msg: string) => {
+    setToast(msg);
+    window.setTimeout(() => setToast(null), 2800);
+  }, []);
+
+  const handleAiSend = useCallback(
+    (text: string) => {
+      const userMsg: DashboardChatMessage = {
+        id: crypto.randomUUID(),
+        role: "user",
+        text,
+      };
+      const lower = text.toLowerCase();
+      if (lower.includes("random quote")) {
+        refreshQuotes();
+        setAiMessages((m) => [
+          ...m,
+          userMsg,
+          {
+            id: crypto.randomUUID(),
+            role: "assistant",
+            text: "Done — new quotes are on the wall. No full page reload needed.",
+          },
+        ]);
+        showToast("Quotes refreshed");
+        return;
+      }
+      setAiMessages((m) => [
+        ...m,
+        userMsg,
+        {
+          id: crypto.randomUUID(),
+          role: "assistant",
+          text:
+            "I'm listening. Connect your preferred model here for full answers — or say \"random quote\" anytime to shuffle the wall.",
+        },
+      ]);
+    },
+    [refreshQuotes, showToast],
+  );
+
+  const q = gridQuotes;
+  const [q0, q1, q2, q3, q4] = [q[0], q[1], q[2], q[3], q[4]];
 
   const timeStr = now.toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -79,112 +200,196 @@ export function HomePage() {
     document.title = "Sanctuary — The Nocturnal Dashboard";
   }, []);
 
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setNotificationsOpen(false);
+        setSettingsOpen(false);
+      }
+    };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, []);
+
   return (
-    <div className="min-h-screen bg-[#0a0e14] font-sans text-slate-100 antialiased">
+    <div className="min-h-screen bg-[#0a0e14] font-manrope text-slate-100 antialiased">
       <SideNavBar />
 
       <div className="pl-64">
-        <header className="sticky top-0 z-20 flex h-16 items-center justify-end gap-4 border-b border-white/5 bg-[#0a0e14]/60 px-8 backdrop-blur-xl">
-          <button
-            type="button"
-            className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-white"
-            aria-label="Notifications"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-            </svg>
-          </button>
-          <button
-            type="button"
-            className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-white"
-            aria-label="Settings"
-          >
-            <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-            </svg>
-          </button>
+        <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-2 border-b border-white/5 bg-[#0a0e14]/60 px-8 backdrop-blur-xl">
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setNotificationsOpen((o) => !o);
+                setSettingsOpen(false);
+              }}
+              className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-[#f1f3fc]"
+              aria-expanded={notificationsOpen}
+              aria-label="Notifications"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
+                />
+              </svg>
+            </button>
+            {notificationsOpen && (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-40 cursor-default bg-transparent"
+                  aria-label="Close"
+                  onClick={() => setNotificationsOpen(false)}
+                />
+                <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-white/10 bg-[#20262f]/95 p-4 shadow-deep backdrop-blur-xl">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Notifications</p>
+                  <ul className="mt-3 space-y-3 text-sm text-slate-300">
+                    <li className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                      Sanctuary sync is up to date.
+                    </li>
+                    <li className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
+                      New quotes available — open AI and say &quot;random quote&quot;.
+                    </li>
+                  </ul>
+                </div>
+              </>
+            )}
+          </div>
+
+          <div className="relative">
+            <button
+              type="button"
+              onClick={() => {
+                setSettingsOpen((o) => !o);
+                setNotificationsOpen(false);
+              }}
+              className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-[#f1f3fc]"
+              aria-expanded={settingsOpen}
+              aria-label="Settings"
+            >
+              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={1.5}
+                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
+                />
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+              </svg>
+            </button>
+            {settingsOpen && (
+              <>
+                <button
+                  type="button"
+                  className="fixed inset-0 z-40 cursor-default bg-transparent"
+                  aria-label="Close"
+                  onClick={() => setSettingsOpen(false)}
+                />
+                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/10 bg-[#20262f]/95 p-4 shadow-deep backdrop-blur-xl">
+                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Settings</p>
+                  <p className="mt-3 text-sm text-slate-400">
+                    Dashboard preferences will live here (theme, density, notifications).
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setSettingsOpen(false)}
+                    className="mt-4 w-full rounded-lg bg-[#2962FF] py-2 text-sm font-bold text-white transition hover:brightness-110"
+                  >
+                    Done
+                  </button>
+                </div>
+              </>
+            )}
+          </div>
         </header>
 
         <main className="p-8 pb-40">
           <div className="mb-10 flex flex-col gap-2">
-            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-slate-500">
-              Dashboard
-            </p>
+            <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-slate-500">Dashboard</p>
             <h1 className="text-3xl font-extrabold tracking-tighter text-white md:text-4xl">
               The Nocturnal Dashboard
             </h1>
           </div>
 
-          {/* Current atmosphere */}
           <section className="mb-10 flex flex-col gap-8 lg:flex-row lg:items-end lg:justify-between">
             <div>
-              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">
-                Current atmosphere
-              </p>
+              <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">Current atmosphere</p>
               <p
-                className="mt-1 text-[clamp(3.5rem,8vw,5.5rem)] font-extrabold leading-none tracking-tighter text-[#f1f3fc]"
+                className="mt-1 text-7xl font-bold leading-none tracking-tight text-[#f1f3fc] md:text-8xl"
                 style={{ fontFeatureSettings: '"tnum"' }}
               >
                 {timeStr}
               </p>
-              <p className="mt-3 text-lg font-medium text-slate-400">
-                {formatLongDate(now)}
-              </p>
+              <p className="mt-3 text-lg font-medium text-slate-400">{formatLongDate(now)}</p>
             </div>
-            <div className="flex items-center gap-3 self-start rounded-full border border-white/10 bg-[#0f141a] px-5 py-2.5 shadow-deep">
+            <div className="flex items-center gap-3 self-start rounded-full border border-white/10 bg-[#20262f]/60 px-5 py-2.5 shadow-deep backdrop-blur-xl">
               <span className="relative flex h-2.5 w-2.5">
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-emerald-400/50" />
                 <span className="relative inline-flex h-2.5 w-2.5 rounded-full bg-emerald-400 shadow-[0_0_10px_rgba(52,211,153,0.8)]" />
               </span>
               <span className="text-[11px] font-bold uppercase tracking-[0.2em] text-slate-300">
-                Day {day} of 365
+                Day {dayOfYear} of {totalDays}
               </span>
             </div>
           </section>
 
-          {/* Masonry wall */}
           <section className="grid grid-cols-1 gap-6 lg:grid-cols-12">
-            {/* Large Dickens — spans 7 cols, 2 rows on lg */}
+            {/* Hero */}
             <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#0f141a] p-8 text-center shadow-deep sm:p-12 lg:col-span-7 lg:row-span-2 lg:min-h-[420px]">
+              {q0 && <QuoteCardActions onFavorite={() => showToast("Saved to favorites (preview)")} onShare={() => showToast("Share link copied (preview)")} />}
               <LargeQuoteDecoration />
-              <blockquote className="font-serif text-2xl font-light italic leading-snug tracking-tight text-slate-100 sm:text-3xl md:text-4xl">
-                &ldquo;The sun himself is weak when he first rises, and gathers strength and courage as the day gets on.&rdquo;
+              <blockquote className="font-serif text-2xl font-light italic leading-snug tracking-tight text-[#f1f3fc] sm:text-3xl md:text-4xl">
+                &ldquo;{q0?.text ?? "—"}&rdquo;
               </blockquote>
               <footer className="mt-10 text-center text-[11px] font-bold uppercase tracking-[0.25em] text-slate-500">
-                Charles Dickens
+                {q0?.author ?? ""}
               </footer>
             </article>
 
-            {/* Tim Ferriss — top right */}
-            <article className="flex flex-col justify-center rounded-2xl border border-white/10 bg-[#0f141a] p-8 shadow-deep sm:p-10 lg:col-span-5">
+            {/* Card 2 */}
+            <article className="relative flex flex-col justify-center rounded-2xl border border-white/10 bg-[#0f141a] p-8 shadow-deep sm:p-10 lg:col-span-5">
+              {q1 && <QuoteCardActions onFavorite={() => showToast("Saved to favorites (preview)")} onShare={() => showToast("Share link copied (preview)")} />}
               <div className="mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-amber-500/15 text-amber-400">
                 <svg className="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z" />
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={1.5}
+                    d="M12 3v1m0 16v1m9-9h-1M4 12H3m15.364 6.364l-.707-.707M6.343 6.343l-.707-.707m12.728 0l-.707.707M6.343 17.657l-.707.707M16 12a4 4 0 11-8 0 4 4 0 018 0z"
+                  />
                 </svg>
               </div>
               <p className="font-serif text-xl font-light italic leading-relaxed text-slate-200 sm:text-2xl">
-                &ldquo;Focus on being productive instead of busy.&rdquo;
+                &ldquo;{q1?.text ?? ""}&rdquo;
               </p>
               <p className="mt-4 text-center text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                — Tim Ferriss
+                — {q1?.author ?? ""}
               </p>
             </article>
 
-            {/* Gradient energy */}
-            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-600/90 via-violet-600/80 to-app-primary/90 p-8 shadow-deep sm:p-12 lg:col-span-5">
+            {/* Gradient */}
+            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-gradient-to-br from-indigo-600/90 via-violet-600/80 to-[#2962FF]/90 p-8 shadow-deep sm:p-12 lg:col-span-5">
+              {q2 && <QuoteCardActions onFavorite={() => showToast("Saved to favorites (preview)")} onShare={() => showToast("Share link copied (preview)")} />}
               <div className="mb-6 text-white/90">
                 <svg className="h-8 w-8" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M13 10V3L4 14h7v7l9-11h-7z" />
                 </svg>
               </div>
               <p className="font-serif text-xl font-light italic leading-relaxed text-white sm:text-2xl md:text-3xl">
-                &ldquo;Energy flows where attention goes.&rdquo;
+                &ldquo;{q2?.text ?? ""}&rdquo;
+              </p>
+              <p className="mt-6 text-center text-[11px] font-bold uppercase tracking-[0.25em] text-white/70">
+                {q2?.author ?? ""}
               </p>
             </article>
 
-            {/* Lao Tzu landscape */}
-            <article className="relative overflow-hidden rounded-2xl border border-white/10 shadow-deep lg:col-span-7 min-h-[280px]">
+            {/* Landscape */}
+            <article className="relative min-h-[280px] overflow-hidden rounded-2xl border border-white/10 shadow-deep lg:col-span-7">
+              {q3 && <QuoteCardActions onFavorite={() => showToast("Saved to favorites (preview)")} onShare={() => showToast("Share link copied (preview)")} />}
               <div
                 className="absolute inset-0 bg-cover bg-center"
                 style={{
@@ -195,31 +400,34 @@ export function HomePage() {
               <div className="absolute inset-0 bg-gradient-to-t from-[#0a0e14] via-[#0a0e14]/75 to-transparent" />
               <div className="relative flex h-full min-h-[280px] flex-col justify-end p-8 sm:p-12">
                 <p className="font-serif text-xl font-light italic leading-relaxed text-white sm:text-2xl md:text-3xl">
-                  &ldquo;Nature does not hurry, yet everything is accomplished.&rdquo;
+                  &ldquo;{q3?.text ?? ""}&rdquo;
                 </p>
                 <p className="mt-4 text-[11px] font-bold uppercase tracking-[0.25em] text-slate-400">
-                  Lao Tzu
+                  {q3?.author ?? ""}
                 </p>
               </div>
             </article>
 
-            {/* Progress */}
-            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-black/60 p-8 shadow-deep sm:p-12 lg:col-span-5">
+            {/* Progress + quote */}
+            <article className="relative overflow-hidden rounded-2xl border border-white/10 bg-[#20262f]/60 p-8 shadow-deep backdrop-blur-xl sm:p-12 lg:col-span-5">
+              {q4 && <QuoteCardActions onFavorite={() => showToast("Saved to favorites (preview)")} onShare={() => showToast("Share link copied (preview)")} />}
               <span className="pointer-events-none absolute inset-0 flex items-center justify-center text-[10rem] font-extrabold leading-none text-white/[0.04] select-none">
-                01
+                {String(progressPct).padStart(2, "0")}
               </span>
               <div className="relative">
-                <p className="font-serif text-xl font-light italic leading-relaxed text-slate-200 sm:text-2xl">
-                  &ldquo;Small steps lead to great distances.&rdquo;
+                <p className="font-serif text-xl font-light italic leading-relaxed text-[#f1f3fc] sm:text-2xl">
+                  &ldquo;{q4?.text ?? ""}&rdquo;
                 </p>
+                <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.2em] text-slate-500">{q4?.author ?? ""}</p>
                 <div className="mt-10">
                   <div className="mb-2 flex justify-between text-[10px] font-bold uppercase tracking-[0.2em] text-slate-500">
-                    <span>Daily progress</span>
-                    <span className="text-app-accent-soft">66%</span>
+                    <span>Year progress</span>
+                    <span className="text-[#94aaff]">{progressPct}%</span>
                   </div>
                   <div className="h-2 overflow-hidden rounded-full bg-white/10">
                     <div
-                      className="h-full w-[66%] rounded-full bg-gradient-to-r from-app-accent-soft to-app-primary shadow-[0_0_16px_rgba(148,170,255,0.5)]"
+                      className="h-full rounded-full bg-gradient-to-r from-[#94aaff] to-[#2962FF] shadow-[0_0_16px_rgba(148,170,255,0.5)] transition-[width] duration-500"
+                      style={{ width: `${progressPct}%` }}
                       aria-hidden
                     />
                   </div>
@@ -234,12 +442,18 @@ export function HomePage() {
         </main>
       </div>
 
-      <DashboardAIWidget />
+      <DashboardAIWidget messages={aiMessages} onSend={handleAiSend} />
+
+      {toast && (
+        <div className="fixed bottom-24 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-white/10 bg-[#20262f]/95 px-5 py-2.5 text-sm font-semibold text-[#f1f3fc] shadow-lg backdrop-blur-xl">
+          {toast}
+        </div>
+      )}
 
       <Link
         to="/"
         onClick={() => clearDevBypass()}
-        className="fixed bottom-8 left-[calc(16rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-app-primary hover:underline max-lg:left-8 max-lg:bottom-32"
+        className="fixed bottom-8 left-[calc(16rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline max-lg:left-8 max-lg:bottom-32"
       >
         Sign out (preview)
       </Link>
