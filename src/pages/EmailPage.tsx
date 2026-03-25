@@ -8,8 +8,7 @@ import { GMAIL_SCOPES, loadGoogleIdentityScript } from "../lib/googleIdentity";
 import {
   buildMimeMessage,
   getFullMessage,
-  getMessageMetadata,
-  listMessageIds,
+  loadInboxSummaries,
   modifyLabels,
   sendRawMessage,
   trashMessage,
@@ -136,7 +135,7 @@ export function EmailPage() {
   const [replyDraft, setReplyDraft] = useState("");
 
   useEffect(() => {
-    document.title = "Sanctuary — Email";
+    document.title = "The Sanctuary — Inbox";
   }, []);
 
   const showToast = useCallback((msg: string) => {
@@ -150,15 +149,13 @@ export function EmailPage() {
       setError(null);
       try {
         const q = filterQuery(mailFilter);
-        const ids = await listMessageIds(token, 50, q);
-        if (ids.length === 0) {
+        const sorted = await loadInboxSummaries(token, 50, q);
+        if (sorted.length === 0) {
           setMessages([]);
           setSelectedId(null);
           setFullBody(null);
           return;
         }
-        const summaries = await Promise.all(ids.map((item) => getMessageMetadata(token, item.id)));
-        const sorted = summaries.sort((a, b) => Number(b.internalDate) - Number(a.internalDate));
         setMessages(sorted);
         setSelectedId((prev) => {
           if (prev && sorted.some((m) => m.id === prev)) return prev;
@@ -410,7 +407,7 @@ export function EmailPage() {
           <div className="border-b border-white/5 p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <h1 className="text-2xl font-extrabold tracking-tighter text-white md:text-3xl">
-                The Nocturnal Dashboard
+                Sanctuary Inbox
               </h1>
             </div>
 
@@ -513,11 +510,54 @@ export function EmailPage() {
             </div>
 
             {!hasClient && (
-              <p className="rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100/90">
-                Add <code className="rounded bg-black/30 px-1">VITE_GOOGLE_CLIENT_ID</code> to{" "}
-                <code className="rounded bg-black/30 px-1">.env</code> and restart the dev server to
-                enable Gmail sync.
-              </p>
+              <div className="space-y-3 rounded-xl border border-amber-500/30 bg-amber-500/10 p-4 text-sm text-amber-100/90">
+                <p>
+                  Add your Google OAuth <strong>Web client ID</strong> to{" "}
+                  <code className="rounded bg-black/30 px-1">.env</code> as{" "}
+                  <code className="rounded bg-black/30 px-1">VITE_GOOGLE_CLIENT_ID</code>, then restart{" "}
+                  <code className="rounded bg-black/30 px-1">npm run dev</code>.
+                </p>
+                <ol className="list-decimal space-y-1.5 pl-4 text-xs leading-relaxed text-amber-100/80">
+                  <li>
+                    Enable{" "}
+                    <a
+                      href="https://console.cloud.google.com/apis/library/gmail.googleapis.com"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-amber-200 underline-offset-2 hover:underline"
+                    >
+                      Gmail API
+                    </a>{" "}
+                    for your Cloud project.
+                  </li>
+                  <li>
+                    Configure the{" "}
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials/consent"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-amber-200 underline-offset-2 hover:underline"
+                    >
+                      OAuth consent screen
+                    </a>{" "}
+                    (add Gmail scopes; in <strong>Testing</strong>, add yourself as a{" "}
+                    <strong>test user</strong>).
+                  </li>
+                  <li>
+                    Create an{" "}
+                    <a
+                      href="https://console.cloud.google.com/apis/credentials"
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="font-semibold text-amber-200 underline-offset-2 hover:underline"
+                    >
+                      OAuth 2.0 Client ID
+                    </a>{" "}
+                    (Web application). Under <strong>Authorized JavaScript origins</strong>, add{" "}
+                    <code className="rounded bg-black/25 px-1">{window.location.origin}</code>.
+                  </li>
+                </ol>
+              </div>
             )}
 
             {!accessToken && hasClient && (

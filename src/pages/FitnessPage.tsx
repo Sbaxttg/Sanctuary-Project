@@ -8,6 +8,7 @@ const STORAGE_GOALS = "sanctuary-fitness-goals-v1";
 const STORAGE_WEIGHT = "sanctuary-fitness-weight-series-v1";
 const STORAGE_EXERCISES = "sanctuary-fitness-exercises-v1";
 const STORAGE_HYDRATION = "sanctuary-fitness-hydration-v1";
+const STORAGE_LAST_SESSION = "sanctuary-fitness-last-session-seconds-v1";
 
 type Goal = { id: string; title: string; progress: number };
 type Exercise = { id: string; name: string; meta: string; done: boolean };
@@ -65,6 +66,17 @@ function loadExercises(): Exercise[] {
   }
 }
 
+function loadLastSessionSeconds(): number {
+  try {
+    const raw = localStorage.getItem(STORAGE_LAST_SESSION);
+    if (raw == null) return 0;
+    const n = Number(raw);
+    return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
+  } catch {
+    return 0;
+  }
+}
+
 function loadHydration(): { targetL: number; consumedL: number } {
   try {
     const raw = localStorage.getItem(STORAGE_HYDRATION);
@@ -97,9 +109,10 @@ export function FitnessPage() {
 
   const [sessionActive, setSessionActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [lastSessionSeconds, setLastSessionSeconds] = useState(() => loadLastSessionSeconds());
 
   useEffect(() => {
-    document.title = "Sanctuary — Fitness";
+    document.title = "The Sanctuary — Fitness";
   }, []);
 
   useEffect(() => {
@@ -202,9 +215,21 @@ export function FitnessPage() {
 
   const toggleSession = () => {
     if (!sessionActive) {
+      if (lastSessionSeconds > 0) {
+        console.log(
+          `[Fitness] Last workout session duration: ${formatSessionTime(lastSessionSeconds)} (${lastSessionSeconds}s)`,
+        );
+      } else {
+        console.log("[Fitness] No previous completed workout session yet.");
+      }
       setElapsedSeconds(0);
       setSessionActive(true);
     } else {
+      const completed = elapsedSeconds;
+      if (completed > 0) {
+        localStorage.setItem(STORAGE_LAST_SESSION, String(completed));
+        setLastSessionSeconds(completed);
+      }
       setSessionActive(false);
       setElapsedSeconds(0);
     }
@@ -603,6 +628,13 @@ export function FitnessPage() {
               {/* Column 3 — Hydration */}
               <div className="space-y-6 xl:col-span-4">
                 <h2 className="text-2xl font-bold tracking-tight text-white">Holistic Stats</h2>
+                <div className="rounded-2xl border border-white/5 bg-[#0a0e14] p-6">
+                  <p className="text-xs font-bold uppercase tracking-widest text-[#f1f3fc]/40">Workout</p>
+                  <p className="mt-2 text-sm text-slate-400">Last session length</p>
+                  <p className="mt-1 font-mono text-2xl font-bold tabular-nums text-white">
+                    {lastSessionSeconds > 0 ? formatSessionTime(lastSessionSeconds) : "—"}
+                  </p>
+                </div>
                 <div className="rounded-2xl border border-white/5 bg-[#0a0e14] p-6">
                   <div className="flex flex-wrap items-start gap-3">
                     <span className="text-2xl" aria-hidden>

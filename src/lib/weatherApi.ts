@@ -4,10 +4,14 @@
  */
 
 const API = "https://api.openweathermap.org/data/2.5";
+/** Imperial: °F, mph; visibility from API remains meters. */
+const UNITS = "imperial";
 
 export function getApiKey(): string | undefined {
   const k = import.meta.env.VITE_OPENWEATHER_API_KEY;
-  return typeof k === "string" && k.length > 0 ? k : undefined;
+  if (typeof k !== "string") return undefined;
+  const trimmed = k.trim();
+  return trimmed.length > 0 ? trimmed : undefined;
 }
 
 export class WeatherApiError extends Error {
@@ -25,10 +29,10 @@ export interface CurrentWeatherData {
   country: string;
   lat: number;
   lon: number;
-  tempC: number;
-  feelsLikeC: number;
+  tempF: number;
+  feelsLikeF: number;
   humidity: number;
-  windSpeedMs: number;
+  windSpeedMph: number;
   visibilityM: number;
   description: string;
   iconCode: string;
@@ -38,7 +42,7 @@ export interface CurrentWeatherData {
 
 export interface HourlyBar {
   label: string;
-  tempC: number;
+  tempF: number;
   /** Closest to "now" for highlight */
   isNow: boolean;
 }
@@ -78,11 +82,27 @@ function aqiToGaugePercent(aqi: number): number {
 
 async function fetchJson<T>(url: string): Promise<T> {
   const res = await fetch(url);
-  if (!res.ok) {
-    const err = (await res.json().catch(() => ({}))) as { message?: string; cod?: string };
-    throw new WeatherApiError(err.message || `HTTP ${res.status}`, String(err.cod ?? res.status));
+  const text = await res.text();
+  let parsed: unknown;
+  try {
+    parsed = text ? JSON.parse(text) : {};
+  } catch {
+    parsed = {};
   }
-  return res.json() as Promise<T>;
+  if (!res.ok) {
+    const err = parsed as { message?: string; cod?: string | number };
+    const rawMsg =
+      typeof err.message === "string" && err.message.length > 0
+        ? err.message
+        : `Weather request failed (${res.status})`;
+    const cod = String(err.cod ?? res.status);
+    const is401 = res.status === 401 || cod === "401";
+    const msg = is401
+      ? `${rawMsg} — Checklist: (1) Confirm your email in OpenWeather (profile / inbox link). (2) Copy the key again from https://home.openweathermap.org/api_keys — if you deleted and recreated a key, update .env. (3) Wait up to 2 hours for a brand-new account/key. (4) Restart \`npm run dev\` after changing .env. See https://openweathermap.org/faq#error401`
+      : rawMsg;
+    throw new WeatherApiError(msg, cod);
+  }
+  return parsed as T;
 }
 
 type OWCurrent = {
@@ -121,10 +141,10 @@ function parseCurrent(data: OWCurrent): CurrentWeatherData {
     country: data.sys.country,
     lat: data.coord.lat,
     lon: data.coord.lon,
-    tempC: data.main.temp,
-    feelsLikeC: data.main.feels_like,
+    tempF: data.main.temp,
+    feelsLikeF: data.main.feels_like,
     humidity: data.main.humidity,
-    windSpeedMs: data.wind?.speed ?? 0,
+    windSpeedMph: data.wind?.speed ?? 0,
     visibilityM: data.visibility ?? 10_000,
     description: w?.description ?? "",
     iconCode: w?.icon ?? "02d",
@@ -147,9 +167,9 @@ export async function fetchWeatherByQuery(query: string): Promise<{ lat: number;
 
   let url: string;
   if (looksUsZip(q)) {
-    url = `${API}/weather?zip=${encodeURIComponent(q)},us&appid=${key}&units=metric`;
+    url = `${API}/weather?zip=${encodeURIComponent(q)},us&appid=${key}&units=${UNITS}`;
   } else {
-    url = `${API}/weather?q=${encodeURIComponent(q)}&appid=${key}&units=metric`;
+    url = `${API}/weather?q=${encodeURIComponent(q)}&appid=${key}&units=${UNITS}`;
   }
 
   const data = await fetchJson<OWCurrent>(url);
@@ -159,14 +179,14 @@ export async function fetchWeatherByQuery(query: string): Promise<{ lat: number;
 export async function fetchWeatherByCoords(lat: number, lon: number): Promise<OWCurrent> {
   const key = getApiKey();
   if (!key) throw new WeatherApiError("Add VITE_OPENWEATHER_API_KEY to your .env file.");
-  const url = `${API}/weather?lat=${lat}&lon=${lon}&appid=${key}&units=metric`;
+  const url = `${API}/weather?lat=${lat}&lon=${lon}&appid=${key}&units=${UNITS}`;
   return fetchJson<OWCurrent>(url);
 }
 
 async function fetchForecast(lat: number, lon: number): Promise<OWForecast> {
   const key = getApiKey();
   if (!key) throw new WeatherApiError("Missing API key.");
-  const url = `${API}/forecast?lat=${lat}&lon=${lon}&appid=${key}&units=metric`;
+  const url = `${API}/forecast?lat=${lat}&lon=${lon}&appid=${key}&units=${UNITS}`;
   return fetchJson<OWForecast>(url);
 }
 
@@ -210,7 +230,7 @@ function buildHourly(forecast: OWForecast, timezone: number, nowSec: number): Ho
   });
   return list.map((item, i) => ({
     label: formatHourLabel(item.dt, timezone),
-    tempC: item.main.temp,
+    tempF: item.main.temp,
     isNow: i === closestIdx,
   }));
 }
@@ -301,12 +321,9 @@ export async function loadWeatherBundleByCoords(lat: number, lon: number): Promi
   return { current, hourly, daily, air };
 }
 
-export function msToKmh(ms: number): number {
-  return Math.round(ms * 3.6);
-}
-
-export function mToKm(m: number): number {
-  return Math.round((m / 1000) * 10) / 10;
+/** Visibility from OpenWeather is meters (same for metric/imperial). */
+export function mToMiles(m: number): number {
+  return Math.round((m / 1609.34) * 10) / 10;
 }
 
 export function formatLocalDate(dtSec: number, timezone: number): string {

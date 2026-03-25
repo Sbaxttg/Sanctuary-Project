@@ -97,13 +97,30 @@ export async function getMessageMetadata(
   };
 }
 
+/** Gmail returns 429 if too many metadata requests run at once for the same user. */
+const METADATA_FETCH_CONCURRENCY = 5;
+
+async function fetchSummariesForIds(
+  token: string,
+  ids: GmailMessageListItem[],
+): Promise<GmailMessageSummary[]> {
+  const out: GmailMessageSummary[] = [];
+  for (let i = 0; i < ids.length; i += METADATA_FETCH_CONCURRENCY) {
+    const chunk = ids.slice(i, i + METADATA_FETCH_CONCURRENCY);
+    const batch = await Promise.all(chunk.map((item) => getMessageMetadata(token, item.id)));
+    out.push(...batch);
+  }
+  return out;
+}
+
 export async function loadInboxSummaries(
   token: string,
   maxResults = 50,
+  query?: string,
 ): Promise<GmailMessageSummary[]> {
-  const ids = await listMessageIds(token, maxResults);
+  const ids = await listMessageIds(token, maxResults, query);
   if (ids.length === 0) return [];
-  const summaries = await Promise.all(ids.map((item) => getMessageMetadata(token, item.id)));
+  const summaries = await fetchSummariesForIds(token, ids);
   return summaries.sort((a, b) => Number(b.internalDate) - Number(a.internalDate));
 }
 

@@ -9,8 +9,7 @@ import {
   getApiKey,
   loadWeatherBundle,
   loadWeatherBundleByCoords,
-  mToKm,
-  msToKmh,
+  mToMiles,
   type AirQualityData,
   type WeatherBundle,
 } from "../lib/weatherApi";
@@ -151,7 +150,7 @@ export function WeatherPage() {
   }, []);
 
   useEffect(() => {
-    document.title = "Sanctuary — Weather";
+    document.title = "The Sanctuary — Forecast";
   }, []);
 
   useEffect(() => {
@@ -159,9 +158,10 @@ export function WeatherPage() {
     if (hasKey) {
       void runLoad(() => loadWeatherBundle(q));
     } else {
-      setError("Add VITE_OPENWEATHER_API_KEY to your .env file (see .env.example).");
+      setBundle(null);
+      setError(null);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load / API key only
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- initial load when key appears; city from draft
   }, [hasKey]);
 
   const onSearch = () => {
@@ -194,28 +194,28 @@ export function WeatherPage() {
     if (!bundle) return null;
     return {
       cityName: `${bundle.current.cityName}, ${bundle.current.country}`,
-      tempC: bundle.current.tempC,
-      feelsLikeC: bundle.current.feelsLikeC,
+      tempF: bundle.current.tempF,
+      feelsLikeF: bundle.current.feelsLikeF,
       description: bundle.current.description,
-      windKmh: msToKmh(bundle.current.windSpeedMs),
+      windMph: Math.round(bundle.current.windSpeedMph),
       humidity: bundle.current.humidity,
     };
   }, [bundle]);
 
   const hourlyBars = useMemo(() => {
     if (!bundle?.hourly.length) return [];
-    const temps = bundle.hourly.map((h) => h.tempC);
+    const temps = bundle.hourly.map((h) => h.tempF);
     const minT = Math.min(...temps);
     const maxT = Math.max(...temps);
     const span = Math.max(1, maxT - minT);
     return bundle.hourly.map((h) => ({
       ...h,
-      heightPct: 25 + ((h.tempC - minT) / span) * 65,
+      heightPct: 25 + ((h.tempF - minT) / span) * 65,
     }));
   }, [bundle]);
 
   const weeklyRange = useMemo(() => {
-    if (!bundle?.daily.length) return { min: 0, max: 30 };
+    if (!bundle?.daily.length) return { min: 32, max: 90 };
     const lows = bundle.daily.map((d) => d.low);
     const highs = bundle.daily.map((d) => d.high);
     return {
@@ -231,7 +231,7 @@ export function WeatherPage() {
       <div className="flex min-h-screen pl-64">
         <div className="min-w-0 flex-1">
           <header className="sticky top-0 z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-[#0a0e14]/90 px-4 py-3 backdrop-blur-xl md:px-8">
-            <h1 className="text-2xl font-bold tracking-tight text-white">Weather Hub</h1>
+            <h1 className="text-2xl font-bold tracking-tight text-white">Sanctuary Forecast</h1>
             <div className="flex w-full flex-1 flex-wrap items-center justify-end gap-2 md:gap-4 lg:max-w-2xl">
               <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/10 bg-[#0c1016] px-3 py-2 md:px-4">
                 <button
@@ -282,8 +282,46 @@ export function WeatherPage() {
             </div>
           </header>
 
+          {!hasKey && (
+            <div className="border-b border-amber-500/30 bg-amber-500/10 px-4 py-4 text-sm text-amber-100/90 md:px-8">
+              <p className="font-semibold text-amber-50">OpenWeather API key needed for live data</p>
+              <p className="mt-2 text-xs leading-relaxed text-amber-100/85">
+                Sanctuary Forecast uses{" "}
+                <a
+                  href="https://openweathermap.org/api"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-semibold text-amber-200 underline-offset-2 hover:underline"
+                >
+                  OpenWeatherMap
+                </a>{" "}
+                (free tier). Create an account → <strong>API keys</strong> → copy your key.
+              </p>
+              <ol className="mt-3 list-decimal space-y-1.5 pl-4 text-xs leading-relaxed text-amber-100/80">
+                <li>
+                  Open{" "}
+                  <code className="rounded bg-black/30 px-1">.env</code> in the project root (next to{" "}
+                  <code className="rounded bg-black/30 px-1">package.json</code>).
+                </li>
+                <li>
+                  Set:{" "}
+                  <code className="rounded bg-black/30 px-1">VITE_OPENWEATHER_API_KEY=your_key_here</code>
+                </li>
+                <li>
+                  Save, then restart <code className="rounded bg-black/30 px-1">npm run dev</code> (Vite only
+                  reads <code className="rounded bg-black/30 px-1">.env</code> on startup).
+                </li>
+              </ol>
+              <p className="mt-3 text-[11px] text-amber-200/70">
+                New keys can take up to ~2 hours to activate. Then search any city, US ZIP, or use{" "}
+                <strong>Use my location</strong>.
+              </p>
+            </div>
+          )}
           {error && (
-            <div className="border-b border-amber-500/30 bg-amber-500/10 px-8 py-3 text-sm text-amber-100/90">{error}</div>
+            <div className="border-b border-red-500/25 bg-red-500/10 px-4 py-3 text-sm text-red-100/90 md:px-8">
+              {error}
+            </div>
           )}
           {loading && (
             <div className="border-b border-white/5 px-8 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
@@ -305,7 +343,7 @@ export function WeatherPage() {
                     {bundle ? formatLocalDate(bundle.current.dt, bundle.current.timezone) : "Search a city to begin"}
                   </p>
                   <p className="mt-2 text-9xl font-bold leading-none tracking-tighter text-white md:text-[10rem]">
-                    {bundle ? `${Math.round(bundle.current.tempC)}°C` : "—"}
+                    {bundle ? `${Math.round(bundle.current.tempF)}°F` : "—"}
                   </p>
                 </div>
                 <div className="flex flex-col items-center lg:items-end">
@@ -329,7 +367,7 @@ export function WeatherPage() {
                     <span className="text-sky-400">◇</span> Wind
                   </p>
                   <p className="mt-2 text-lg font-bold text-sky-100">
-                    {bundle ? `${msToKmh(bundle.current.windSpeedMs)} km/h` : "—"}
+                    {bundle ? `${Math.round(bundle.current.windSpeedMph)} mph` : "—"}
                   </p>
                 </div>
                 <div>
@@ -343,7 +381,7 @@ export function WeatherPage() {
                     <span className="text-indigo-400">◎</span> Visibility
                   </p>
                   <p className="mt-2 text-lg font-bold text-indigo-100">
-                    {bundle ? `${mToKm(bundle.current.visibilityM)} km` : "—"}
+                    {bundle ? `${mToMiles(bundle.current.visibilityM)} mi` : "—"}
                   </p>
                 </div>
               </div>
@@ -367,7 +405,7 @@ export function WeatherPage() {
                         }
                         style={{ height: `${Math.max(28, (h.heightPct / 100) * 112)}px` }}
                       />
-                      <span className="text-sm font-bold text-slate-300">{Math.round(h.tempC)}°</span>
+                      <span className="text-sm font-bold text-slate-300">{Math.round(h.tempF)}°F</span>
                     </div>
                   ))
                 )}
@@ -404,14 +442,14 @@ export function WeatherPage() {
                           </div>
                         </div>
                         <div className="flex flex-wrap items-center gap-4 lg:flex-1">
-                          <span className="w-8 text-sm font-bold text-slate-400">{row.low}°</span>
+                          <span className="w-8 text-sm font-bold text-slate-400">{row.low}°F</span>
                           <div className="relative h-3 min-w-[140px] flex-1 rounded-full bg-[#0a0e14]">
                             <div
                               className="absolute inset-y-0 rounded-full bg-gradient-to-r from-[#2962FF] to-[#94aaff] opacity-90"
                               style={{ left: `${left}%`, width: `${Math.max(8, width)}%` }}
                             />
                           </div>
-                          <span className="w-8 text-sm font-bold text-white">{row.high}°</span>
+                          <span className="w-8 text-sm font-bold text-white">{row.high}°F</span>
                           <span className="inline-flex items-center gap-1 rounded-full bg-black/40 px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-slate-400">
                             <svg className="h-3 w-3 text-sky-400" fill="currentColor" viewBox="0 0 24 24" aria-hidden>
                               <path d="M12 2c-5 8-8 10-8 14a8 8 0 1016 0c0-4-3-6-8-14z" />

@@ -41,26 +41,32 @@ Open the URL shown in the terminal (usually `http://localhost:5173`).
 
 ### Weather page (OpenWeatherMap)
 
-1. Create a free API key at [openweathermap.org/api](https://openweathermap.org/api).
+1. Create a free account and API key at [openweathermap.org/api](https://openweathermap.org/api) (under **API keys** in your profile). **New keys can take up to ~2 hours** before requests succeed.
 2. Copy `.env.example` to `.env` and set:
 
    ```bash
    VITE_OPENWEATHER_API_KEY=your_key_here
    ```
 
-3. Restart `npm run dev`. Search by **city** or **US ZIP**; use **Use my location** for GPS-based weather.
+3. Restart `npm run dev`. Search by **city name** (e.g. `Paris`, `Tokyo`) or **US ZIP** (`90210`); use **Use my location** for GPS-based weather (works on `localhost` and HTTPS).
+
+If you see **401 Invalid API key**, double-check the key in `.env`, restart the dev server, or wait until the key has finished activating on OpenWeather’s side.
 
 ### Email page (Gmail sync)
 
-1. In [Google Cloud Console](https://console.cloud.google.com/), create a project (or pick one), enable **Gmail API**, and create **OAuth 2.0 Client ID** credentials of type **Web application**.
-2. Under **Authorized JavaScript origins**, add your dev origin (e.g. `http://localhost:5173`) and any deployed URL.
-3. Copy `.env.example` to `.env` and set:
+1. In [Google Cloud Console](https://console.cloud.google.com/), select or create a project.
+2. Enable **[Gmail API](https://console.cloud.google.com/apis/library/gmail.googleapis.com)** for that project.
+3. Open **APIs & Services → [OAuth consent screen](https://console.cloud.google.com/apis/credentials/consent)**. Choose **External** (unless you use Google Workspace and prefer Internal), fill the required app name / support email, and add **Scopes** for Gmail — at minimum the app requests `gmail.modify` and `gmail.send` (add them under “Add or remove scopes” → Gmail). While publishing status is **Testing**, add your own Google account under **Test users** so you can sign in.
+4. Open **APIs & Services → [Credentials](https://console.cloud.google.com/apis/credentials)** → **Create credentials** → **OAuth client ID** → application type **Web application**. Under **Authorized JavaScript origins**, add exactly your app origin, e.g. `http://localhost:5173` (include the port). You typically do **not** need an authorized redirect URI for this Vite app.
+5. Copy `.env.example` to `.env` (if you do not already have one) and set:
 
    ```bash
    VITE_GOOGLE_CLIENT_ID=your_client_id.apps.googleusercontent.com
    ```
 
-4. Restart `npm run dev`. On **Email**, click **Sync Gmail** to sign in with Google and load messages. **Compose** opens a modal; **Archive / Delete / Spam / Star** call the Gmail API when a message is selected.
+6. Restart `npm run dev`. On **Email**, click **Sync Gmail**, choose your Google account, and allow access. **Compose** opens a modal; **Archive / Delete / Spam / Star** use the Gmail API when a message is selected.
+
+If Google shows **access_denied** or **403**, check that the Gmail API is enabled, the consent screen includes the Gmail scopes, and (in Testing mode) your account is listed as a test user.
 
 ### Build
 

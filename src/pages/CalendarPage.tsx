@@ -181,7 +181,7 @@ export function CalendarPage() {
   const [modalTitle, setModalTitle] = useState("");
 
   useEffect(() => {
-    document.title = "Sanctuary — Calendar";
+    document.title = "The Sanctuary — Calendar";
   }, []);
 
   useEffect(() => {
@@ -390,7 +390,7 @@ export function CalendarPage() {
       <div className="flex min-h-screen flex-col pl-64">
         <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-6 border-b border-white/5 bg-[#0a0e14]/80 px-8 backdrop-blur-xl">
           <div className="flex min-w-0 flex-wrap items-baseline gap-3">
-            <h1 className="text-lg font-bold tracking-tight text-white">MeadBax Hub</h1>
+            <h1 className="text-lg font-bold tracking-tight text-white">Sanctuary Calendar</h1>
             <span className="text-sm font-medium text-slate-500">{monthYearLabel}</span>
           </div>
           <div className="flex flex-1 flex-wrap items-center justify-end gap-2 md:gap-4">

@@ -72,7 +72,7 @@ export function SideNavBar() {
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-64 flex-col border-r border-white/5 bg-[#0f141a]">
       <div className="px-6 pt-8">
-        <h1 className="text-2xl font-extrabold tracking-tight text-sky-50">Sanctuary</h1>
+        <h1 className="text-2xl font-extrabold tracking-tight text-sky-50">The Sanctuary</h1>
         <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.35em] text-slate-500">
           Premium productivity
         </p>

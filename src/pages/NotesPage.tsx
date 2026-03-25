@@ -48,7 +48,7 @@ export function NotesPage() {
   }, [data]);
 
   useEffect(() => {
-    document.title = "Sanctuary — Notes";
+    document.title = "The Sanctuary — Notes";
   }, []);
 
   const filteredNotes = useMemo(() => {

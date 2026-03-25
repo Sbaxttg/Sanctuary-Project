@@ -10,29 +10,29 @@ function SparkleIcon() {
 
 export type WeatherConciergeContext = {
   cityName: string;
-  tempC: number;
-  feelsLikeC: number;
+  tempF: number;
+  feelsLikeF: number;
   description: string;
-  windKmh: number;
+  windMph: number;
   humidity: number;
 } | null;
 
 function buildSmartSuggestion(ctx: NonNullable<WeatherConciergeContext>): string {
-  const t = ctx.tempC;
+  const t = ctx.tempF;
   const desc = ctx.description.toLowerCase();
-  const wind = ctx.windKmh;
+  const wind = ctx.windMph;
   const hum = ctx.humidity;
 
-  if (t < 0) {
-    return `Sub-freezing: insulated jacket, gloves, and traction-aware footwear. Wind ${wind} km/h — cover exposed skin.`;
+  if (t < 32) {
+    return `Sub-freezing: insulated jacket, gloves, and traction-aware footwear. Wind ${wind} mph — cover exposed skin.`;
   }
-  if (t < 8) {
-    return `Optimal attire: warm coat, light layers, and a scarf if wind picks up (${wind} km/h).`;
+  if (t < 46) {
+    return `Optimal attire: warm coat, light layers, and a scarf if wind picks up (${wind} mph).`;
   }
-  if (t < 16) {
+  if (t < 61) {
     return `Light jacket or breathable layers. ${hum}% humidity — comfortable for brisk walks or easy runs.`;
   }
-  if (t < 26) {
+  if (t < 79) {
     if (desc.includes("rain") || desc.includes("drizzle")) {
       return `Mild with wet conditions — bring a breathable waterproof shell and quick-dry base layer.`;
     }
@@ -43,9 +43,9 @@ function buildSmartSuggestion(ctx: NonNullable<WeatherConciergeContext>): string
 
 function buildIntroLine(ctx: NonNullable<WeatherConciergeContext>): string {
   const place = ctx.cityName;
-  const t = Math.round(ctx.tempC);
+  const t = Math.round(ctx.tempF);
   const desc = ctx.description.replace(/\b\w/g, (c) => c.toUpperCase());
-  return `${place}: ${t}°C and ${desc}. Wind ${ctx.windKmh} km/h — here’s a quick take on what to wear.`;
+  return `${place}: ${t}°F and ${desc}. Wind ${ctx.windMph} mph — here’s a quick take on what to wear.`;
 }
 
 export function WeatherAIWidget({ weather }: { weather: WeatherConciergeContext }) {
@@ -60,7 +60,7 @@ export function WeatherAIWidget({ weather }: { weather: WeatherConciergeContext 
   const suggestion = weather ? buildSmartSuggestion(weather) : "";
   const intro = weather ? buildIntroLine(weather) : "";
   const bestWindow =
-    weather && weather.tempC >= 5 && weather.tempC < 28
+    weather && weather.tempF >= 41 && weather.tempF < 82
       ? "Aim for mid-morning or early evening when light is softer and wind is often calmer."
       : "Adjust outdoor time to avoid peak heat or wind chill depending on your comfort zone.";
 

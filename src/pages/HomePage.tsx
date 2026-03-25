@@ -197,7 +197,7 @@ export function HomePage() {
   });
 
   useEffect(() => {
-    document.title = "Sanctuary — The Nocturnal Dashboard";
+    document.title = "The Sanctuary — Wall of Wisdom";
   }, []);
 
   useEffect(() => {
@@ -311,7 +311,7 @@ export function HomePage() {
           <div className="mb-10 flex flex-col gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-slate-500">Dashboard</p>
             <h1 className="text-3xl font-extrabold tracking-tighter text-white md:text-4xl">
-              The Nocturnal Dashboard
+              Wall of Wisdom
             </h1>
           </div>
 

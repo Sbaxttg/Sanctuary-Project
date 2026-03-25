@@ -145,7 +145,7 @@ export function SignInPage() {
                 <ShieldIcon />
               </div>
               <h1 className="text-3xl font-extrabold tracking-tight text-white">
-                Sanctuary
+                The Sanctuary
               </h1>
               <p className="mt-2 text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">
                 Digital workspace
