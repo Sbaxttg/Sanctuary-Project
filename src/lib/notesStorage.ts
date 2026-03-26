@@ -20,6 +20,8 @@ export type NotesState = {
   notes: Note[];
 };
 
+import { storageGet, storageSet } from "./sanctuaryStorage";
+
 const STORAGE_KEY = "sanctuary-notes-v2";
 
 function uid(): string {
@@ -32,7 +34,7 @@ export function createEmptyState(): NotesState {
 
 export function loadNotesState(): NotesState {
   try {
-    const raw = localStorage.getItem(STORAGE_KEY);
+    const raw = storageGet(STORAGE_KEY);
     if (!raw) return createEmptyState();
     const parsed = JSON.parse(raw) as NotesState;
     if (!parsed || !Array.isArray(parsed.folders) || !Array.isArray(parsed.notes)) {
@@ -45,7 +47,7 @@ export function loadNotesState(): NotesState {
 }
 
 export function saveNotesState(state: NotesState): void {
-  localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
+  storageSet(STORAGE_KEY, JSON.stringify(state));
 }
 
 export function newFolder(name: string): Folder {

@@ -1,4 +1,8 @@
+import { useEffect, useState } from "react";
 import { NavLink } from "react-router-dom";
+import { getPublicProfile, SANCTUARY_PROFILE_CHANGED } from "../../lib/auth";
+import { useProfileModal } from "../../context/ProfileModalContext";
+import { ProfileAvatar } from "./ProfileAvatar";
 
 function HomeIcon() {
   return (
@@ -69,6 +73,15 @@ const fitnessNavClass = (isActive: boolean) =>
   ].join(" ");
 
 export function SideNavBar() {
+  const [profile, setProfile] = useState(() => getPublicProfile());
+  const { openProfile } = useProfileModal();
+
+  useEffect(() => {
+    const bump = () => setProfile(getPublicProfile());
+    window.addEventListener(SANCTUARY_PROFILE_CHANGED, bump);
+    return () => window.removeEventListener(SANCTUARY_PROFILE_CHANGED, bump);
+  }, []);
+
   return (
     <aside className="fixed left-0 top-0 z-30 flex h-screen w-64 flex-col border-r border-white/5 bg-[#0f141a]">
       <div className="px-6 pt-8">
@@ -159,18 +172,22 @@ export function SideNavBar() {
       </nav>
 
       <div className="border-t border-white/5 p-4">
-        <div className="flex items-center gap-3 rounded-xl border border-white/5 bg-black/20 p-3">
-          <div
-            className="h-10 w-10 shrink-0 rounded-full ring-2 ring-white/10"
-            style={{
-              background: "linear-gradient(135deg, #6366f1, #0f172a)",
-            }}
-          />
-          <div className="min-w-0">
-            <p className="truncate text-sm font-bold text-white">Alex MeadBax</p>
-            <p className="text-[12px] font-medium text-slate-500">Pro Member</p>
+        <button
+          type="button"
+          onClick={openProfile}
+          className="flex w-full items-center gap-3 rounded-xl border border-white/5 bg-black/20 p-3 text-left transition hover:border-white/10 hover:bg-white/[0.04]"
+        >
+          <ProfileAvatar profile={profile} size={40} ringClassName="ring-white/10" />
+          <div className="min-w-0 flex-1">
+            <p className="truncate text-sm font-bold text-white">{profile.displayName}</p>
+            <p className="truncate text-[12px] font-medium text-slate-500">{profile.subtitle}</p>
           </div>
-        </div>
+          <span className="shrink-0 text-slate-500" aria-hidden>
+            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+            </svg>
+          </span>
+        </button>
       </div>
     </aside>
   );

@@ -7,6 +7,12 @@ interface ImportMetaEnv {
   readonly VITE_OPENWEATHER_API_KEY?: string;
   /** Google OAuth Web client ID — Gmail API + Identity Services */
   readonly VITE_GOOGLE_CLIENT_ID?: string;
+  /** `gemini` | `openai` — must match which server-side key you set (GEMINI_API_KEY vs OPENAI_API_KEY). */
+  readonly VITE_AI_PROVIDER?: string;
+  /** Optional override for Gemini model (default gemini-2.5-flash) */
+  readonly VITE_GEMINI_MODEL?: string;
+  /** Optional override for Nocturnal AI model (default gpt-4o-mini) */
+  readonly VITE_OPENAI_MODEL?: string;
 }
 
 interface ImportMeta {

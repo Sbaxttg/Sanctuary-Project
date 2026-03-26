@@ -1,5 +1,8 @@
 import { BrowserRouter, Navigate, Route, Routes } from "react-router-dom";
+import { OmniAIPanel } from "./components/omni/OmniAIPanel";
 import { RequireAuth } from "./components/RequireAuth";
+import { AISanctuaryProvider } from "./context/AISanctuaryContext";
+import { ProfileModalProvider } from "./context/ProfileModalContext";
 import { HomePage } from "./pages/HomePage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { WeatherPage } from "./pages/WeatherPage";
@@ -11,6 +14,8 @@ import { SignInPage } from "./pages/SignInPage";
 export default function App() {
   return (
     <BrowserRouter>
+      <AISanctuaryProvider>
+      <ProfileModalProvider>
       <Routes>
         <Route path="/" element={<SignInPage />} />
         <Route
@@ -64,6 +69,9 @@ export default function App() {
         <Route path="/workspace" element={<Navigate to="/home" replace />} />
         <Route path="*" element={<Navigate to="/" replace />} />
       </Routes>
+      <OmniAIPanel />
+      </ProfileModalProvider>
+      </AISanctuaryProvider>
     </BrowserRouter>
   );
 }

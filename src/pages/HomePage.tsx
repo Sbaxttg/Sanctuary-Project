@@ -1,8 +1,8 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { clearDevBypass } from "../lib/auth";
-import { DashboardAIWidget, type DashboardChatMessage } from "../components/dashboard/DashboardAIWidget";
+import { signOut } from "../lib/auth";
 import { SideNavBar } from "../components/dashboard/SideNavBar";
+import { useRegisterAISanctuary } from "../context/AISanctuaryContext";
 import { MOTIVATIONAL_QUOTES, type MotivationalQuote } from "../data/motivationalQuotes";
 import { pickUniqueRandomQuotes } from "../lib/quotePicker";
 
@@ -137,10 +137,7 @@ export function HomePage() {
   const [gridQuotes, setGridQuotes] = useState<MotivationalQuote[]>(() =>
     pickUniqueRandomQuotes(MOTIVATIONAL_QUOTES, QUOTE_GRID_SLOTS),
   );
-  const [aiMessages, setAiMessages] = useState<DashboardChatMessage[]>([]);
   const [toast, setToast] = useState<string | null>(null);
-  const [notificationsOpen, setNotificationsOpen] = useState(false);
-  const [settingsOpen, setSettingsOpen] = useState(false);
 
   const refreshQuotes = useCallback(() => {
     setGridQuotes(pickUniqueRandomQuotes(MOTIVATIONAL_QUOTES, QUOTE_GRID_SLOTS));
@@ -151,41 +148,33 @@ export function HomePage() {
     window.setTimeout(() => setToast(null), 2800);
   }, []);
 
-  const handleAiSend = useCallback(
-    (text: string) => {
-      const userMsg: DashboardChatMessage = {
-        id: crypto.randomUUID(),
-        role: "user",
-        text,
-      };
-      const lower = text.toLowerCase();
-      if (lower.includes("random quote")) {
+  const contextText = useMemo(
+    () =>
+      `Wall of Wisdom: ${QUOTE_GRID_SLOTS} motivational quote cards. User can ask to shuffle or refresh quotes.`,
+    [],
+  );
+
+  const toolHandlers = useMemo(
+    () => ({
+      shuffle_wall_quotes: () => {
         refreshQuotes();
-        setAiMessages((m) => [
-          ...m,
-          userMsg,
-          {
-            id: crypto.randomUUID(),
-            role: "assistant",
-            text: "Done — new quotes are on the wall. No full page reload needed.",
-          },
-        ]);
         showToast("Quotes refreshed");
-        return;
-      }
-      setAiMessages((m) => [
-        ...m,
-        userMsg,
-        {
-          id: crypto.randomUUID(),
-          role: "assistant",
-          text:
-            "I'm listening. Connect your preferred model here for full answers — or say \"random quote\" anytime to shuffle the wall.",
-        },
-      ]);
-    },
+        return "Shuffled all quote slots on the wall. The grid updated without a full page reload.";
+      },
+    }),
     [refreshQuotes, showToast],
   );
+
+  const aiReg = useMemo(
+    () => ({
+      route: "/home",
+      label: "Wall of Wisdom (Home dashboard)",
+      contextText,
+      toolHandlers,
+    }),
+    [contextText, toolHandlers],
+  );
+  useRegisterAISanctuary(aiReg);
 
   const q = gridQuotes;
   const [q0, q1, q2, q3, q4] = [q[0], q[1], q[2], q[3], q[4]];
@@ -200,113 +189,11 @@ export function HomePage() {
     document.title = "The Sanctuary — Wall of Wisdom";
   }, []);
 
-  useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") {
-        setNotificationsOpen(false);
-        setSettingsOpen(false);
-      }
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, []);
-
   return (
     <div className="min-h-screen bg-[#0a0e14] font-manrope text-slate-100 antialiased">
       <SideNavBar />
 
       <div className="pl-64">
-        <header className="sticky top-0 z-30 flex h-16 items-center justify-end gap-2 border-b border-white/5 bg-[#0a0e14]/60 px-8 backdrop-blur-xl">
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setNotificationsOpen((o) => !o);
-                setSettingsOpen(false);
-              }}
-              className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-[#f1f3fc]"
-              aria-expanded={notificationsOpen}
-              aria-label="Notifications"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                />
-              </svg>
-            </button>
-            {notificationsOpen && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-40 cursor-default bg-transparent"
-                  aria-label="Close"
-                  onClick={() => setNotificationsOpen(false)}
-                />
-                <div className="absolute right-0 top-full z-50 mt-2 w-80 rounded-xl border border-white/10 bg-[#20262f]/95 p-4 shadow-deep backdrop-blur-xl">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Notifications</p>
-                  <ul className="mt-3 space-y-3 text-sm text-slate-300">
-                    <li className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                      Sanctuary sync is up to date.
-                    </li>
-                    <li className="rounded-lg border border-white/5 bg-black/20 px-3 py-2">
-                      New quotes available — open AI and say &quot;random quote&quot;.
-                    </li>
-                  </ul>
-                </div>
-              </>
-            )}
-          </div>
-
-          <div className="relative">
-            <button
-              type="button"
-              onClick={() => {
-                setSettingsOpen((o) => !o);
-                setNotificationsOpen(false);
-              }}
-              className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-[#f1f3fc]"
-              aria-expanded={settingsOpen}
-              aria-label="Settings"
-            >
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                  strokeWidth={1.5}
-                  d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
-            </button>
-            {settingsOpen && (
-              <>
-                <button
-                  type="button"
-                  className="fixed inset-0 z-40 cursor-default bg-transparent"
-                  aria-label="Close"
-                  onClick={() => setSettingsOpen(false)}
-                />
-                <div className="absolute right-0 top-full z-50 mt-2 w-72 rounded-xl border border-white/10 bg-[#20262f]/95 p-4 shadow-deep backdrop-blur-xl">
-                  <p className="text-xs font-bold uppercase tracking-[0.2em] text-slate-500">Settings</p>
-                  <p className="mt-3 text-sm text-slate-400">
-                    Dashboard preferences will live here (theme, density, notifications).
-                  </p>
-                  <button
-                    type="button"
-                    onClick={() => setSettingsOpen(false)}
-                    className="mt-4 w-full rounded-lg bg-[#2962FF] py-2 text-sm font-bold text-white transition hover:brightness-110"
-                  >
-                    Done
-                  </button>
-                </div>
-              </>
-            )}
-          </div>
-        </header>
-
         <main className="p-8 pb-40">
           <div className="mb-10 flex flex-col gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-slate-500">Dashboard</p>
@@ -442,8 +329,6 @@ export function HomePage() {
         </main>
       </div>
 
-      <DashboardAIWidget messages={aiMessages} onSend={handleAiSend} />
-
       {toast && (
         <div className="fixed bottom-24 left-1/2 z-[60] -translate-x-1/2 rounded-full border border-white/10 bg-[#20262f]/95 px-5 py-2.5 text-sm font-semibold text-[#f1f3fc] shadow-lg backdrop-blur-xl">
           {toast}
@@ -452,10 +337,10 @@ export function HomePage() {
 
       <Link
         to="/"
-        onClick={() => clearDevBypass()}
+        onClick={() => signOut()}
         className="fixed bottom-8 left-[calc(16rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline max-lg:left-8 max-lg:bottom-32"
       >
-        Sign out (preview)
+        Sign out
       </Link>
     </div>
   );

@@ -1,13 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { clearDevBypass } from "../lib/auth";
+import { signOut } from "../lib/auth";
+import { storageGet, storageSet } from "../lib/sanctuaryStorage";
 import { SideNavBar } from "../components/dashboard/SideNavBar";
-import { FitnessAICoach } from "../components/fitness/FitnessAICoach";
+import { useRegisterAISanctuary } from "../context/AISanctuaryContext";
 
 const STORAGE_GOALS = "sanctuary-fitness-goals-v1";
 const STORAGE_WEIGHT = "sanctuary-fitness-weight-series-v1";
 const STORAGE_EXERCISES = "sanctuary-fitness-exercises-v1";
 const STORAGE_HYDRATION = "sanctuary-fitness-hydration-v1";
+const STORAGE_CALORIES = "sanctuary-fitness-calories-v1";
 const STORAGE_LAST_SESSION = "sanctuary-fitness-last-session-seconds-v1";
 
 type Goal = { id: string; title: string; progress: number };
@@ -28,7 +30,7 @@ function parseWeightInput(raw: string): number | null {
 
 function loadGoals(): Goal[] {
   try {
-    const raw = localStorage.getItem(STORAGE_GOALS);
+    const raw = storageGet(STORAGE_GOALS);
     if (!raw) return [];
     const parsed = JSON.parse(raw) as Goal[];
     return Array.isArray(parsed) ? parsed : [];
@@ -39,7 +41,7 @@ function loadGoals(): Goal[] {
 
 function loadWeightSeries(): (number | null)[] {
   try {
-    const raw = localStorage.getItem(STORAGE_WEIGHT);
+    const raw = storageGet(STORAGE_WEIGHT);
     if (!raw) return Array(30).fill(null);
     const parsed = JSON.parse(raw) as (number | null)[];
     if (Array.isArray(parsed) && parsed.length === 30) return parsed;
@@ -57,7 +59,7 @@ const DEFAULT_EXERCISES: Exercise[] = [
 
 function loadExercises(): Exercise[] {
   try {
-    const raw = localStorage.getItem(STORAGE_EXERCISES);
+    const raw = storageGet(STORAGE_EXERCISES);
     if (!raw) return DEFAULT_EXERCISES;
     const parsed = JSON.parse(raw) as Exercise[];
     return Array.isArray(parsed) && parsed.length > 0 ? parsed : DEFAULT_EXERCISES;
@@ -68,7 +70,7 @@ function loadExercises(): Exercise[] {
 
 function loadLastSessionSeconds(): number {
   try {
-    const raw = localStorage.getItem(STORAGE_LAST_SESSION);
+    const raw = storageGet(STORAGE_LAST_SESSION);
     if (raw == null) return 0;
     const n = Number(raw);
     return Number.isFinite(n) && n >= 0 ? Math.floor(n) : 0;
@@ -79,7 +81,7 @@ function loadLastSessionSeconds(): number {
 
 function loadHydration(): { targetL: number; consumedL: number } {
   try {
-    const raw = localStorage.getItem(STORAGE_HYDRATION);
+    const raw = storageGet(STORAGE_HYDRATION);
     if (!raw) return { targetL: 3, consumedL: 2.1 };
     const parsed = JSON.parse(raw) as { targetL?: number; consumedL?: number };
     const targetL = typeof parsed.targetL === "number" && parsed.targetL > 0 ? parsed.targetL : 3;
@@ -88,6 +90,23 @@ function loadHydration(): { targetL: number; consumedL: number } {
     return { targetL, consumedL };
   } catch {
     return { targetL: 3, consumedL: 2.1 };
+  }
+}
+
+function loadCalories(): { targetKcal: number; consumedKcal: number } {
+  try {
+    const raw = storageGet(STORAGE_CALORIES);
+    if (!raw) return { targetKcal: 2000, consumedKcal: 0 };
+    const parsed = JSON.parse(raw) as { targetKcal?: number; consumedKcal?: number };
+    let targetKcal =
+      typeof parsed.targetKcal === "number" && parsed.targetKcal >= 800 ? parsed.targetKcal : 2000;
+    targetKcal = Math.min(8000, targetKcal);
+    let consumedKcal =
+      typeof parsed.consumedKcal === "number" && parsed.consumedKcal >= 0 ? parsed.consumedKcal : 0;
+    consumedKcal = Math.min(consumedKcal, targetKcal);
+    return { targetKcal, consumedKcal };
+  } catch {
+    return { targetKcal: 2000, consumedKcal: 0 };
   }
 }
 
@@ -107,6 +126,9 @@ export function FitnessPage() {
   const [hydrationTargetL, setHydrationTargetL] = useState(() => loadHydration().targetL);
   const [hydrationConsumedL, setHydrationConsumedL] = useState(() => loadHydration().consumedL);
 
+  const [calorieTargetKcal, setCalorieTargetKcal] = useState(() => loadCalories().targetKcal);
+  const [calorieConsumedKcal, setCalorieConsumedKcal] = useState(() => loadCalories().consumedKcal);
+
   const [sessionActive, setSessionActive] = useState(false);
   const [elapsedSeconds, setElapsedSeconds] = useState(0);
   const [lastSessionSeconds, setLastSessionSeconds] = useState(() => loadLastSessionSeconds());
@@ -116,12 +138,30 @@ export function FitnessPage() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_GOALS, JSON.stringify(goals));
+    storageSet(STORAGE_GOALS, JSON.stringify(goals));
   }, [goals]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_WEIGHT, JSON.stringify(weightSeries));
+    storageSet(STORAGE_WEIGHT, JSON.stringify(weightSeries));
   }, [weightSeries]);
+
+  useEffect(() => {
+    storageSet(STORAGE_EXERCISES, JSON.stringify(exercises));
+  }, [exercises]);
+
+  useEffect(() => {
+    storageSet(
+      STORAGE_HYDRATION,
+      JSON.stringify({ targetL: hydrationTargetL, consumedL: hydrationConsumedL }),
+    );
+  }, [hydrationTargetL, hydrationConsumedL]);
+
+  useEffect(() => {
+    storageSet(
+      STORAGE_CALORIES,
+      JSON.stringify({ targetKcal: calorieTargetKcal, consumedKcal: calorieConsumedKcal }),
+    );
+  }, [calorieTargetKcal, calorieConsumedKcal]);
 
   useEffect(() => {
     if (!sessionActive) return;
@@ -159,6 +199,11 @@ export function FitnessPage() {
     if (hydrationTargetL <= 0) return 0;
     return Math.min(100, (hydrationConsumedL / hydrationTargetL) * 100);
   }, [hydrationConsumedL, hydrationTargetL]);
+
+  const caloriePercent = useMemo(() => {
+    if (calorieTargetKcal <= 0) return 0;
+    return Math.min(100, (calorieConsumedKcal / calorieTargetKcal) * 100);
+  }, [calorieConsumedKcal, calorieTargetKcal]);
 
   const addGoal = useCallback(() => {
     const title = goalDraft.trim();
@@ -213,6 +258,64 @@ export function FitnessPage() {
     if (editingId === id) setEditingId(null);
   };
 
+  const addExerciseForAi = useCallback((name: string, meta: string) => {
+    const id = `ex-${Date.now()}`;
+    setExercises((list) => [
+      ...list,
+      {
+        id,
+        name: name.trim() || "Exercise",
+        meta: meta.trim() || "Sets • Reps",
+        done: false,
+      },
+    ]);
+  }, []);
+
+  const fitnessAiContext = useMemo(() => {
+    const logged = weightSeries.filter((x): x is number => x != null);
+    const tail = logged.slice(-10);
+    return [
+      `Fitness Sanctuary — ${exercises.length} routine line(s).`,
+      `Workout session ${sessionActive ? "in progress" : "idle"}; last completed session stored: ${lastSessionSeconds ? formatSessionTime(lastSessionSeconds) : "none"}.`,
+      `Weight chart (last up to 10 logged lbs): ${tail.length ? tail.join(", ") : "no entries"}.`,
+      `Goals: ${goals.length}. Calories: ${calorieConsumedKcal}/${calorieTargetKcal} kcal. Hydration: ${hydrationConsumedL}/${hydrationTargetL} L.`,
+    ].join(" ");
+  }, [
+    exercises.length,
+    sessionActive,
+    lastSessionSeconds,
+    weightSeries,
+    goals.length,
+    calorieConsumedKcal,
+    calorieTargetKcal,
+    hydrationConsumedL,
+    hydrationTargetL,
+  ]);
+
+  const fitnessToolHandlers = useMemo(
+    () => ({
+      fitness_add_exercise: (args: Record<string, unknown>) => {
+        const name = String(args.name ?? "").trim();
+        const meta = String(args.meta ?? "Sets • Reps").trim();
+        if (!name) return "Provide a non-empty exercise name (e.g. '30 min HIIT').";
+        addExerciseForAi(name, meta);
+        return `Added "${name}" to the Active Routine list.`;
+      },
+    }),
+    [addExerciseForAi],
+  );
+
+  const fitnessAiReg = useMemo(
+    () => ({
+      route: "/fitness",
+      label: "Fitness Sanctuary",
+      contextText: fitnessAiContext,
+      toolHandlers: fitnessToolHandlers,
+    }),
+    [fitnessAiContext, fitnessToolHandlers],
+  );
+  useRegisterAISanctuary(fitnessAiReg);
+
   const toggleSession = () => {
     if (!sessionActive) {
       if (lastSessionSeconds > 0) {
@@ -227,7 +330,7 @@ export function FitnessPage() {
     } else {
       const completed = elapsedSeconds;
       if (completed > 0) {
-        localStorage.setItem(STORAGE_LAST_SESSION, String(completed));
+        storageSet(STORAGE_LAST_SESSION, String(completed));
         setLastSessionSeconds(completed);
       }
       setSessionActive(false);
@@ -241,58 +344,20 @@ export function FitnessPage() {
 
       <div className="flex min-h-screen pl-64">
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-6 border-b border-white/5 bg-[#0a0e14]/90 px-8 backdrop-blur-xl">
-            <div className="flex min-w-0 flex-1 items-center gap-6">
-              <p className="text-2xl font-bold tracking-tight text-white">Fitness Sanctuary</p>
-              {sessionActive && (
-                <div
-                  className="flex items-center gap-2 rounded-full border border-app-primary/40 bg-app-primary/10 px-4 py-1.5 font-mono text-sm font-bold tabular-nums text-app-primary shadow-[0_0_20px_rgba(41,98,255,0.35)]"
-                  aria-live="polite"
-                >
-                  <span className="relative flex h-2 w-2">
-                    <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-app-primary opacity-75" />
-                    <span className="relative inline-flex h-2 w-2 rounded-full bg-app-primary" />
-                  </span>
-                  Session · {formatSessionTime(elapsedSeconds)}
-                </div>
-              )}
-            </div>
-            <div className="flex flex-1 items-center justify-end gap-4">
-              <button
-                type="button"
-                className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-white"
-                aria-label="Notifications"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-white"
-                aria-label="Settings"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
+          <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-6 border-b border-white/5 bg-[#0a0e14]/90 px-8 backdrop-blur-xl">
+            <p className="text-2xl font-bold tracking-tight text-white">Fitness Sanctuary</p>
+            {sessionActive && (
               <div
-                className="ml-1 h-9 w-9 shrink-0 rounded-full ring-2 ring-white/15"
-                style={{ background: "linear-gradient(135deg, #2962FF, #1e293b)" }}
-                aria-hidden
-              />
-            </div>
+                className="flex items-center gap-2 rounded-full border border-app-primary/40 bg-app-primary/10 px-4 py-1.5 font-mono text-sm font-bold tabular-nums text-app-primary shadow-[0_0_20px_rgba(41,98,255,0.35)]"
+                aria-live="polite"
+              >
+                <span className="relative flex h-2 w-2">
+                  <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-app-primary opacity-75" />
+                  <span className="relative inline-flex h-2 w-2 rounded-full bg-app-primary" />
+                </span>
+                Session · {formatSessionTime(elapsedSeconds)}
+              </div>
+            )}
           </header>
 
           <div className="space-y-8 p-8 pb-40">
@@ -638,6 +703,69 @@ export function FitnessPage() {
                 <div className="rounded-2xl border border-white/5 bg-[#0a0e14] p-6">
                   <div className="flex flex-wrap items-start gap-3">
                     <span className="text-2xl" aria-hidden>
+                      🔥
+                    </span>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-white">Daily calories</p>
+                      <p className="mt-1 text-sm text-slate-400">
+                        <span className="font-semibold text-white">
+                          {Math.round(calorieConsumedKcal)} kcal
+                        </span>{" "}
+                        /{" "}
+                        <label className="inline-flex items-center gap-1.5">
+                          <span className="sr-only">Daily calorie target</span>
+                          <input
+                            type="number"
+                            min={800}
+                            max={8000}
+                            step={50}
+                            value={calorieTargetKcal}
+                            onChange={(e) => {
+                              const v = parseInt(e.target.value, 10);
+                              if (!Number.isFinite(v) || v < 800 || v > 8000) return;
+                              setCalorieTargetKcal(v);
+                              setCalorieConsumedKcal((c) => Math.min(c, v));
+                            }}
+                            className="w-20 rounded-md border border-white/10 bg-[#151a21] px-2 py-1 text-center text-sm font-bold text-white outline-none focus:border-app-primary/40"
+                          />
+                          <span className="text-slate-500">kcal daily target</span>
+                        </label>
+                      </p>
+                    </div>
+                  </div>
+                  <div className="mt-6">
+                    <label
+                      className="text-xs font-bold uppercase tracking-widest text-[#f1f3fc]/40"
+                      htmlFor="calorie-slider"
+                    >
+                      Calories logged today
+                    </label>
+                    <div className="mt-3 flex items-center gap-4">
+                      <input
+                        id="calorie-slider"
+                        type="range"
+                        min={0}
+                        max={calorieTargetKcal}
+                        step={50}
+                        value={calorieConsumedKcal}
+                        onChange={(e) => setCalorieConsumedKcal(Number(e.target.value))}
+                        className="h-2 flex-1 cursor-pointer accent-amber-400"
+                      />
+                      <span className="w-12 shrink-0 text-right text-sm font-bold tabular-nums text-amber-300">
+                        {caloriePercent.toFixed(0)}%
+                      </span>
+                    </div>
+                  </div>
+                  <div className="mt-4 h-3 overflow-hidden rounded-full bg-[#151a21]">
+                    <div
+                      className="h-full rounded-full bg-gradient-to-r from-amber-700 to-amber-400 transition-[width] duration-150"
+                      style={{ width: `${caloriePercent}%` }}
+                    />
+                  </div>
+                </div>
+                <div className="rounded-2xl border border-white/5 bg-[#0a0e14] p-6">
+                  <div className="flex flex-wrap items-start gap-3">
+                    <span className="text-2xl" aria-hidden>
                       💧
                     </span>
                     <div className="min-w-0 flex-1">
@@ -704,14 +832,12 @@ export function FitnessPage() {
         </div>
       </div>
 
-      <FitnessAICoach />
-
       <Link
         to="/"
-        onClick={() => clearDevBypass()}
+        onClick={() => signOut()}
         className="fixed bottom-8 left-[calc(16rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 hover:text-app-primary hover:underline max-md:left-4"
       >
-        Sign out (preview)
+        Sign out
       </Link>
     </div>
   );

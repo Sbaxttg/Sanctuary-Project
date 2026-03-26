@@ -1,9 +1,12 @@
-import { FormEvent, useState } from "react";
+import { FormEvent, useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import {
-  hasDevBypass,
+  continueAsGuest,
+  isAuthenticated,
   isAuthBypassFeatureEnabled,
-  setDevBypass,
+  signIn,
+  signInDevBypass,
+  signUp,
 } from "../lib/auth";
 
 function ShieldIcon() {
@@ -94,18 +97,61 @@ function SparkIcon() {
 }
 
 export function SignInPage() {
-  const [remember, setRemember] = useState(false);
   const navigate = useNavigate();
+  const [mode, setMode] = useState<"signin" | "signup">("signin");
+  const [firstName, setFirstName] = useState("");
+  const [lastName, setLastName] = useState("");
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [remember, setRemember] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [info, setInfo] = useState<string | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  function handleSubmit(e: FormEvent) {
+  useEffect(() => {
+    if (isAuthenticated()) navigate("/home", { replace: true });
+  }, [navigate]);
+
+  async function handleSubmit(e: FormEvent) {
     e.preventDefault();
-    // Demo: until real auth, signing in uses the same dev session as “skip”
-    setDevBypass();
+    setError(null);
+    setInfo(null);
+    setSubmitting(true);
+    try {
+      if (mode === "signup") {
+        if (password !== confirmPassword) {
+          setError("Passwords do not match.");
+          return;
+        }
+        const r = await signUp(email, password, firstName, lastName);
+        if (!r.ok) {
+          setError(r.error);
+          return;
+        }
+        navigate("/home", { replace: true });
+        return;
+      }
+      const r = await signIn(email, password, remember);
+      if (!r.ok) {
+        setError(r.error);
+        return;
+      }
+      navigate("/home", { replace: true });
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  function handleGuest() {
+    setError(null);
+    continueAsGuest();
     navigate("/home", { replace: true });
   }
 
   function handleDevBypass() {
-    setDevBypass();
+    setError(null);
+    signInDevBypass();
     navigate("/home", { replace: true });
   }
 
@@ -156,10 +202,68 @@ export function SignInPage() {
             </div>
 
             <h2 className="mb-8 text-center text-2xl font-bold tracking-tight text-white sm:text-[26px]">
-              Sign in
+              {mode === "signin" ? "Sign in" : "Create account"}
             </h2>
 
+            <p className="mb-6 text-center text-[12px] leading-relaxed text-slate-500">
+              Accounts are stored on <span className="font-semibold text-slate-400">this device only</span>{" "}
+              (not sent to a server). Use the same email and password when you return.
+            </p>
+
+            {error && (
+              <div
+                className="mb-4 rounded-xl border border-red-500/30 bg-red-500/10 px-4 py-3 text-sm font-medium text-red-200"
+                role="alert"
+              >
+                {error}
+              </div>
+            )}
+            {info && (
+              <div className="mb-4 rounded-xl border border-app-primary/25 bg-app-primary/10 px-4 py-3 text-sm font-medium text-slate-200">
+                {info}
+              </div>
+            )}
+
             <form onSubmit={handleSubmit} className="flex flex-col gap-6">
+              {mode === "signup" && (
+                <>
+                  <label className="block">
+                    <span className="sr-only">First name</span>
+                    <div className="flex h-14 items-center gap-3 rounded-xl border border-white/10 bg-app-input px-4 transition-colors focus-within:border-app-primary/50 focus-within:shadow-[0_0_0_1px_rgba(41,98,255,0.35)]">
+                      <span className="flex shrink-0 text-slate-500">
+                        <UserIcon />
+                      </span>
+                      <input
+                        type="text"
+                        name="firstName"
+                        autoComplete="given-name"
+                        placeholder="First name"
+                        value={firstName}
+                        onChange={(e) => setFirstName(e.target.value)}
+                        className="h-full w-full min-w-0 bg-transparent text-[15px] font-medium text-white placeholder:text-slate-500 outline-none"
+                      />
+                    </div>
+                  </label>
+                  <label className="block">
+                    <span className="sr-only">Last name</span>
+                    <div className="flex h-14 items-center gap-3 rounded-xl border border-white/10 bg-app-input px-4 transition-colors focus-within:border-app-primary/50 focus-within:shadow-[0_0_0_1px_rgba(41,98,255,0.35)]">
+                      <span className="flex shrink-0 text-slate-500">
+                        <UserIcon />
+                      </span>
+                      <input
+                        type="text"
+                        name="lastName"
+                        autoComplete="family-name"
+                        placeholder="Last name"
+                        value={lastName}
+                        onChange={(e) => setLastName(e.target.value)}
+                        className="h-full w-full min-w-0 bg-transparent text-[15px] font-medium text-white placeholder:text-slate-500 outline-none"
+                      />
+                    </div>
+                  </label>
+                </>
+              )}
+
               <label className="block">
                 <span className="sr-only">Email address</span>
                 <div className="flex h-14 items-center gap-3 rounded-xl border border-white/10 bg-app-input px-4 transition-colors focus-within:border-app-primary/50 focus-within:shadow-[0_0_0_1px_rgba(41,98,255,0.35)]">
@@ -171,6 +275,8 @@ export function SignInPage() {
                     name="email"
                     autoComplete="email"
                     placeholder="Email address"
+                    value={email}
+                    onChange={(e) => setEmail(e.target.value)}
                     className="h-full w-full min-w-0 bg-transparent text-[15px] font-medium text-white placeholder:text-slate-500 outline-none"
                   />
                 </div>
@@ -185,73 +291,131 @@ export function SignInPage() {
                   <input
                     type="password"
                     name="password"
-                    autoComplete="current-password"
-                    placeholder="Password"
+                    autoComplete={mode === "signup" ? "new-password" : "current-password"}
+                    placeholder={mode === "signup" ? "Password (8+ characters)" : "Password"}
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
                     className="h-full w-full min-w-0 bg-transparent text-[15px] font-medium text-white placeholder:text-slate-500 outline-none"
                   />
                 </div>
               </label>
 
-              <div className="flex flex-wrap items-center justify-between gap-4">
-                <label className="flex cursor-pointer select-none items-center gap-3 text-[14px] font-medium text-slate-400">
-                  <input
-                    type="checkbox"
-                    checked={remember}
-                    onChange={(e) => setRemember(e.target.checked)}
-                    className="app-checkbox"
-                  />
-                  Remember me
+              {mode === "signup" && (
+                <label className="block">
+                  <span className="sr-only">Confirm password</span>
+                  <div className="flex h-14 items-center gap-3 rounded-xl border border-white/10 bg-app-input px-4 transition-colors focus-within:border-app-primary/50 focus-within:shadow-[0_0_0_1px_rgba(41,98,255,0.35)]">
+                    <span className="flex shrink-0 text-slate-500">
+                      <LockIcon />
+                    </span>
+                    <input
+                      type="password"
+                      name="confirmPassword"
+                      autoComplete="new-password"
+                      placeholder="Confirm password"
+                      value={confirmPassword}
+                      onChange={(e) => setConfirmPassword(e.target.value)}
+                      className="h-full w-full min-w-0 bg-transparent text-[15px] font-medium text-white placeholder:text-slate-500 outline-none"
+                    />
+                  </div>
                 </label>
-                <a
-                  href="#forgot"
-                  className="text-[14px] font-semibold text-app-primary transition hover:text-white"
-                >
-                  Forgot password?
-                </a>
-              </div>
+              )}
+
+              {mode === "signin" && (
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <label className="flex cursor-pointer select-none items-center gap-3 text-[14px] font-medium text-slate-400">
+                    <input
+                      type="checkbox"
+                      checked={remember}
+                      onChange={(e) => setRemember(e.target.checked)}
+                      className="app-checkbox"
+                    />
+                    Remember me on this device
+                  </label>
+                  <button
+                    type="button"
+                    className="text-[14px] font-semibold text-app-primary transition hover:text-white"
+                    onClick={() => {
+                      setInfo(
+                        "Passwords are not recoverable from the cloud — they stay in this browser. You can create a new account or use guest mode.",
+                      );
+                      setError(null);
+                    }}
+                  >
+                    Forgot password?
+                  </button>
+                </div>
+              )}
 
               <button
                 type="submit"
-                className="h-14 w-full rounded-xl bg-app-primary text-[15px] font-bold text-white shadow-[0_16px_40px_-12px_rgba(41,98,255,0.55)] transition hover:brightness-110 active:translate-y-px"
+                disabled={submitting}
+                className="h-14 w-full rounded-xl bg-app-primary text-[15px] font-bold text-white shadow-[0_16px_40px_-12px_rgba(41,98,255,0.55)] transition hover:brightness-110 active:translate-y-px disabled:cursor-not-allowed disabled:opacity-60"
               >
-                Sign in
+                {submitting ? "Please wait…" : mode === "signin" ? "Sign in" : "Create account"}
               </button>
 
               <p className="pt-2 text-center text-[14px] font-medium leading-relaxed text-slate-400">
-                Don&apos;t have an account?{" "}
-                <a
-                  href="#create"
-                  className="font-bold text-app-primary transition hover:text-white hover:underline"
-                >
-                  Create account
-                </a>
+                {mode === "signin" ? (
+                  <>
+                    Don&apos;t have an account?{" "}
+                    <button
+                      type="button"
+                      className="font-bold text-app-primary transition hover:text-white hover:underline"
+                      onClick={() => {
+                        setMode("signup");
+                        setError(null);
+                        setInfo(null);
+                        setFirstName("");
+                        setLastName("");
+                      }}
+                    >
+                      Create account
+                    </button>
+                  </>
+                ) : (
+                  <>
+                    Already have an account?{" "}
+                    <button
+                      type="button"
+                      className="font-bold text-app-primary transition hover:text-white hover:underline"
+                      onClick={() => {
+                        setMode("signin");
+                        setError(null);
+                        setInfo(null);
+                        setConfirmPassword("");
+                        setFirstName("");
+                        setLastName("");
+                      }}
+                    >
+                      Sign in
+                    </button>
+                  </>
+                )}
               </p>
             </form>
 
-            {isAuthBypassFeatureEnabled() && (
-              <div className="mt-8 border-t border-white/10 pt-8">
-                <button
-                  type="button"
-                  onClick={handleDevBypass}
-                  className="w-full rounded-xl border border-white/15 bg-[#0c1016] py-3.5 text-sm font-semibold text-slate-200 shadow-[0_32px_64px_-15px_rgba(0,0,0,0.4)] transition hover:border-app-primary/45 hover:bg-white/[0.04]"
-                >
-                  Continue without signing in
-                </button>
-                <p className="mt-3 text-center text-[11px] leading-relaxed text-slate-500">
-                  Development preview only — swap for real sign-up when you wire
-                  authentication.
-                </p>
-              </div>
-            )}
+            <div className="mt-8 border-t border-white/10 pt-8">
+              <button
+                type="button"
+                onClick={handleGuest}
+                className="w-full rounded-xl border border-white/15 bg-[#0c1016] py-3.5 text-sm font-semibold text-slate-200 shadow-[0_32px_64px_-15px_rgba(0,0,0,0.4)] transition hover:border-app-primary/45 hover:bg-white/[0.04]"
+              >
+                Continue without signing in
+              </button>
+              <p className="mt-3 text-center text-[11px] leading-relaxed text-slate-500">
+                Guest mode keeps notes, calendar, fitness, and weather preferences only for this browser tab
+                session. Sign out clears them; they won&apos;t come back after you close the tab.
+              </p>
+            </div>
 
-            {hasDevBypass() && (
+            {isAuthBypassFeatureEnabled() && (
               <div className="mt-6 text-center">
                 <button
                   type="button"
-                  onClick={() => navigate("/home")}
-                  className="text-sm font-semibold text-app-primary underline-offset-4 hover:text-white hover:underline"
+                  onClick={handleDevBypass}
+                  className="text-xs font-semibold text-slate-500 underline-offset-4 hover:text-app-primary hover:underline"
                 >
-                  Open home (dev session saved in this browser)
+                  Dev: skip auth (legacy local storage)
                 </button>
               </div>
             )}

@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Link } from "react-router-dom";
-import { clearDevBypass } from "../lib/auth";
+import { signOut } from "../lib/auth";
 import { SideNavBar } from "../components/dashboard/SideNavBar";
-import { NotesAIWidget, type ChatMessage } from "../components/notes/NotesAIWidget";
+import { useRegisterAISanctuary } from "../context/AISanctuaryContext";
 import { NotesEditorToolbar } from "../components/notes/NotesEditorToolbar";
 import {
   formatRelativeTime,
@@ -36,8 +36,6 @@ export function NotesPage() {
   const [search, setSearch] = useState("");
   const [addingFolder, setAddingFolder] = useState(false);
   const [folderDraft, setFolderDraft] = useState("");
-  const [chatMessages, setChatMessages] = useState<ChatMessage[]>([]);
-
   const editorRef = useRef<HTMLDivElement>(null);
   const titleInputRef = useRef<HTMLInputElement>(null);
   const notesRef = useRef(data.notes);
@@ -135,32 +133,67 @@ export function NotesPage() {
     updateNote(selectedNoteId, { bodyHtml: editorRef.current.innerHTML });
   };
 
-  const handleAppendTag = (tag: string) => {
-    if (!selectedNoteId) return;
-    const note = data.notes.find((n) => n.id === selectedNoteId);
-    if (!note) return;
-    const normalized = tag.startsWith("#") ? tag : `#${tag}`;
-    if (note.tags.includes(normalized)) return;
-    updateNote(selectedNoteId, { tags: [...note.tags, normalized] });
-  };
-
-  const handleChatSend = (text: string) => {
-    const userMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "user",
-      text,
-    };
-    const replyText =
-      "This is a local preview — plug in your AI API here. Use the suggested tags below to add metadata to your note.";
-    const assistantMsg: ChatMessage = {
-      id: crypto.randomUUID(),
-      role: "assistant",
-      text: replyText,
-    };
-    setChatMessages((m) => [...m, userMsg, assistantMsg]);
-  };
+  const handleAppendTag = useCallback(
+    (tag: string) => {
+      if (!selectedNoteId) return;
+      const note = data.notes.find((n) => n.id === selectedNoteId);
+      if (!note) return;
+      const normalized = tag.startsWith("#") ? tag : `#${tag}`;
+      if (note.tags.includes(normalized)) return;
+      updateNote(selectedNoteId, { tags: [...note.tags, normalized] });
+    },
+    [selectedNoteId, data.notes, updateNote],
+  );
 
   const charCount = selectedNote ? stripHtml(selectedNote.bodyHtml).length + selectedNote.title.length : 0;
+
+  const notesAiContext = useMemo(() => {
+    const n = selectedNote;
+    if (!n) return `Notes workspace (${workspaceTab}). No note selected. Total notes in workspace: ${data.notes.filter((x) => x.workspace === workspaceTab).length}.`;
+    const plain = stripHtml(n.bodyHtml).slice(0, 8000);
+    return `Open note: "${n.title}" (id ${n.id}). Tags: ${n.tags.join(", ") || "none"}.\nBody (plain text excerpt):\n${plain}`;
+  }, [selectedNote, workspaceTab, data.notes]);
+
+  const notesToolHandlers = useMemo(
+    () => ({
+      search_notes: (args: Record<string, unknown>) => {
+        const q = String(args.query ?? "").trim().toLowerCase();
+        if (!q) return "Provide a search query.";
+        const matches = data.notes
+          .filter((n) => {
+            const blob = `${n.title} ${stripHtml(n.bodyHtml)} ${n.tags.join(" ")}`.toLowerCase();
+            return blob.includes(q);
+          })
+          .slice(0, 10);
+        if (!matches.length) return "No notes matched that query.";
+        return matches
+          .map(
+            (n) =>
+              `• **${n.title}** (${n.workspace}) — ${stripHtml(n.bodyHtml).slice(0, 140)}${stripHtml(n.bodyHtml).length > 140 ? "…" : ""}`,
+          )
+          .join("\n");
+      },
+      notes_add_tag: (args: Record<string, unknown>) => {
+        const tag = String(args.tag ?? "").trim();
+        if (!tag) return "No tag provided.";
+        if (!selectedNoteId) return "No note is selected.";
+        handleAppendTag(tag);
+        return `Added tag "${tag.startsWith("#") ? tag : `#${tag}`}" to the open note.`;
+      },
+    }),
+    [data.notes, selectedNoteId, handleAppendTag],
+  );
+
+  const notesAiReg = useMemo(
+    () => ({
+      route: "/notes",
+      label: "Notes Sanctuary",
+      contextText: notesAiContext,
+      toolHandlers: notesToolHandlers,
+    }),
+    [notesAiContext, notesToolHandlers],
+  );
+  useRegisterAISanctuary(notesAiReg);
 
   const tabBtn = (active: boolean) =>
     active
@@ -385,37 +418,7 @@ export function NotesPage() {
                 className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[#f1f3fc] placeholder:text-slate-500 outline-none"
               />
             </div>
-            <div className="flex justify-end gap-2">
-              <button
-                type="button"
-                className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-[#f1f3fc]"
-                aria-label="Notifications"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9"
-                  />
-                </svg>
-              </button>
-              <button
-                type="button"
-                className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-[#f1f3fc]"
-                aria-label="Settings"
-              >
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                    strokeWidth={1.5}
-                    d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"
-                  />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
-              </button>
-            </div>
+            <div aria-hidden className="min-w-0" />
           </header>
 
           <div className="relative flex flex-1 flex-col px-8 pb-28 pt-6">
@@ -496,19 +499,12 @@ export function NotesPage() {
         </div>
       </div>
 
-      <NotesAIWidget
-        messages={chatMessages}
-        onSend={handleChatSend}
-        onAppendTag={handleAppendTag}
-        hasActiveNote={Boolean(selectedNote)}
-      />
-
       <Link
         to="/"
-        onClick={() => clearDevBypass()}
+        onClick={() => signOut()}
         className="fixed bottom-8 left-[calc(16rem+20rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline max-lg:left-8 max-lg:bottom-36"
       >
-        Sign out (preview)
+        Sign out
       </Link>
     </div>
   );

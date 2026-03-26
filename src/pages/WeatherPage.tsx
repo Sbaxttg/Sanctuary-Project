@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { clearDevBypass } from "../lib/auth";
+import { signOut } from "../lib/auth";
+import { storageGet, storageSet } from "../lib/sanctuaryStorage";
 import { SideNavBar } from "../components/dashboard/SideNavBar";
-import { WeatherAIWidget } from "../components/weather/WeatherAIWidget";
+import { useRegisterAISanctuary } from "../context/AISanctuaryContext";
 import {
   WeatherApiError,
   formatLocalDate,
@@ -114,7 +115,7 @@ function AirQualityPanel({ air, compact }: { air: AirQualityData | null; compact
 
 function initialSearchQuery(): string {
   try {
-    return localStorage.getItem(STORAGE_LAST_CITY) || "London";
+    return storageGet(STORAGE_LAST_CITY) || "London";
   } catch {
     return "London";
   }
@@ -136,7 +137,7 @@ export function WeatherPage() {
       const b = await fn();
       setBundle(b);
       try {
-        localStorage.setItem(STORAGE_LAST_CITY, `${b.current.cityName}, ${b.current.country}`);
+        storageSet(STORAGE_LAST_CITY, `${b.current.cityName}, ${b.current.country}`);
       } catch {
         /* ignore */
       }
@@ -190,17 +191,32 @@ export function WeatherPage() {
     );
   };
 
-  const conciergeContext = useMemo(() => {
-    if (!bundle) return null;
-    return {
-      cityName: `${bundle.current.cityName}, ${bundle.current.country}`,
-      tempF: bundle.current.tempF,
-      feelsLikeF: bundle.current.feelsLikeF,
-      description: bundle.current.description,
-      windMph: Math.round(bundle.current.windSpeedMph),
-      humidity: bundle.current.humidity,
-    };
+  const weatherAiContext = useMemo(() => {
+    if (!bundle) {
+      return "No forecast loaded. User should search a city / US ZIP or use 'Use my location'.";
+    }
+    const c = bundle.current;
+    return [
+      `Live: ${c.cityName}, ${c.country}.`,
+      `Now: ${Math.round(c.tempF)}°F (feels ${Math.round(c.feelsLikeF)}°F), ${c.description}.`,
+      `Wind ${Math.round(c.windSpeedMph)} mph, humidity ${c.humidity}%, visibility ${mToMiles(c.visibilityM)} mi.`,
+      `Hourly bars: ${bundle.hourly.length}. Daily outlook rows: ${bundle.daily.length}.`,
+      bundle.air
+        ? `Air quality index (OpenWeather 1–5): ${bundle.air.aqi} (${bundle.air.label}).`
+        : "Air quality data not available.",
+    ].join(" ");
   }, [bundle]);
+
+  const weatherAiReg = useMemo(
+    () => ({
+      route: "/weather",
+      label: "Sanctuary Forecast (Weather)",
+      contextText: weatherAiContext,
+      toolHandlers: {},
+    }),
+    [weatherAiContext],
+  );
+  useRegisterAISanctuary(weatherAiReg);
 
   const hourlyBars = useMemo(() => {
     if (!bundle?.hourly.length) return [];
@@ -267,17 +283,6 @@ export function WeatherPage() {
                 className="shrink-0 rounded-full border border-app-primary/40 bg-app-primary/15 px-3 py-2 text-xs font-bold uppercase tracking-wider text-app-primary transition hover:bg-app-primary/25 disabled:opacity-40"
               >
                 {geoLoading ? "Locating…" : "Use my location"}
-              </button>
-              <button type="button" className="rounded-xl p-2.5 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Notifications">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-                </svg>
-              </button>
-              <button type="button" className="rounded-xl p-2.5 text-slate-400 hover:bg-white/5 hover:text-white" aria-label="Settings">
-                <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                </svg>
               </button>
             </div>
           </header>
@@ -472,23 +477,19 @@ export function WeatherPage() {
 
         <aside className="hidden w-80 shrink-0 flex-col gap-8 border-l border-white/5 bg-[#0a0e14] p-8 xl:flex">
           <AirQualityPanel air={bundle?.air ?? null} />
-          <WeatherAIWidget weather={conciergeContext} />
         </aside>
       </div>
 
       <div className="border-t border-white/5 bg-[#0a0e14] p-8 xl:hidden">
         <AirQualityPanel air={bundle?.air ?? null} compact />
-        <div className="mx-auto mt-6 max-w-md">
-          <WeatherAIWidget weather={conciergeContext} />
-        </div>
       </div>
 
       <Link
         to="/"
-        onClick={() => clearDevBypass()}
+        onClick={() => signOut()}
         className="fixed bottom-8 left-8 z-30 text-xs font-semibold text-slate-500 underline-offset-4 hover:text-app-primary hover:underline xl:left-[calc(16rem+2rem)]"
       >
-        Sign out (preview)
+        Sign out
       </Link>
     </div>
   );

@@ -19,6 +19,37 @@ npm run dev
 
 Open the URL shown in the terminal (usually `http://localhost:5173`).
 
+### Nocturnal AI (Google Gemini or OpenAI)
+
+The **Nocturnal AI** panel (bottom-right on every app page except sign-in) uses **function calling** so it can answer questions and perform in-app actions (calendar events, note search, compose drafts, fitness routine rows, quote shuffle, etc.).
+
+**Google Gemini (recommended free tier)** — uses Google’s [OpenAI-compatible](https://ai.google.dev/gemini-api/docs/openai) endpoint:
+
+1. Create an API key in [Google AI Studio](https://aistudio.google.com/apikey).
+2. In `.env`:
+
+   ```bash
+   VITE_AI_PROVIDER=gemini
+   GEMINI_API_KEY=your_key_here
+   ```
+
+3. Optional: `VITE_GEMINI_MODEL=gemini-2.0-flash` (default).
+4. Run **`npm run dev`**. Requests go through Vite’s proxy at `/api/gemini`, so the browser never receives your secret key.
+
+**OpenAI** instead:
+
+1. Create a key at [platform.openai.com/api-keys](https://platform.openai.com/api-keys).
+2. In `.env`:
+
+   ```bash
+   VITE_AI_PROVIDER=openai
+   OPENAI_API_KEY=sk-...
+   ```
+
+3. Optional: `VITE_OPENAI_MODEL=gpt-4o-mini` (default).
+
+**Production / `npm run preview`:** the proxy only runs in dev. For a static deploy, add a small backend or serverless route that forwards chat completions with your key.
+
 ### If `npm install` fails (`esbuild`, `TAR_ENTRY_ERROR`, `vite: command not found`)
 
 1. **Free disk space** — low disk space breaks tar extraction.

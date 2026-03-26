@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from "react";
 import { Link } from "react-router-dom";
-import { clearDevBypass } from "../lib/auth";
+import { signOut } from "../lib/auth";
 import { SideNavBar } from "../components/dashboard/SideNavBar";
-import { EmailAIWidget } from "../components/email/EmailAIWidget";
+import { useRegisterAISanctuary } from "../context/AISanctuaryContext";
 import { ComposeModal } from "../components/email/ComposeModal";
 import { GMAIL_SCOPES, loadGoogleIdentityScript } from "../lib/googleIdentity";
 import {
@@ -290,6 +290,61 @@ export function EmailPage() {
     if (selectedIndex < 0 || selectedIndex >= filteredMessages.length - 1) return;
     setSelectedId(filteredMessages[selectedIndex + 1].id);
   };
+
+  const openComposeDraft = useCallback((to: string, subject: string, body: string) => {
+    setComposeTo(to);
+    setComposeSubject(subject);
+    setComposeBody(body);
+    setComposeError(null);
+    setComposeOpen(true);
+  }, []);
+
+  const emailAiContext = useMemo(() => {
+    const lines: string[] = [];
+    lines.push(
+      accessToken
+        ? "Gmail is connected; API token is available for this session."
+        : "Gmail is not connected — user should use Sync Gmail first.",
+    );
+    lines.push(`Inbox shows ${messages.length} loaded message(s).`);
+    if (selectedSummary) {
+      lines.push(
+        `Selected email — From: ${selectedSummary.from}, Subject: ${selectedSummary.subject}, Snippet: ${selectedSummary.snippet}`,
+      );
+    }
+    if (fullBody) {
+      const excerpt =
+        fullBody.plain?.slice(0, 4000) ||
+        (fullBody.html ? fullBody.html.replace(/<[^>]+>/g, " ").slice(0, 4000) : "");
+      lines.push(`Body excerpt:\n${excerpt || "(empty)"}`);
+    }
+    return lines.join("\n");
+  }, [accessToken, messages.length, selectedSummary, fullBody]);
+
+  const emailToolHandlers = useMemo(
+    () => ({
+      email_open_compose_draft: (args: Record<string, unknown>) => {
+        const body = String(args.body ?? "");
+        if (!body.trim()) return "Provide non-empty body text for the draft.";
+        const to = String(args.to ?? "");
+        const subject = String(args.subject ?? "Draft");
+        openComposeDraft(to, subject, body);
+        return "Compose modal opened with the draft. User can edit and send.";
+      },
+    }),
+    [openComposeDraft],
+  );
+
+  const emailAiReg = useMemo(
+    () => ({
+      route: "/email",
+      label: "Sanctuary Inbox (Gmail)",
+      contextText: emailAiContext,
+      toolHandlers: emailToolHandlers,
+    }),
+    [emailAiContext, emailToolHandlers],
+  );
+  useRegisterAISanctuary(emailAiReg);
 
   const openCompose = () => {
     setComposeError(null);
@@ -824,8 +879,6 @@ export function EmailPage() {
         error={composeError}
       />
 
-      <EmailAIWidget />
-
       {toast && (
         <div className="fixed bottom-24 left-1/2 z-[110] -translate-x-1/2 rounded-full border border-white/10 bg-[#151a21]/95 px-5 py-2.5 text-sm font-semibold text-[#f1f3fc] shadow-lg backdrop-blur-xl">
           {toast}
@@ -834,10 +887,10 @@ export function EmailPage() {
 
       <Link
         to="/"
-        onClick={() => clearDevBypass()}
+        onClick={() => signOut()}
         className="fixed bottom-8 left-[calc(16rem+20rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline max-lg:left-8 max-lg:bottom-36"
       >
-        Sign out (preview)
+        Sign out
       </Link>
     </div>
   );

@@ -4,8 +4,7 @@ import { isAuthenticated } from "../lib/auth";
 type Props = { children: React.ReactNode };
 
 /**
- * Wrap routes that should require sign-in later.
- * Today: allows access if dev bypass is set OR (future) real session exists.
+ * Wrap routes that need an active session: signed-in user, guest, or dev bypass.
  */
 export function RequireAuth({ children }: Props) {
   const location = useLocation();

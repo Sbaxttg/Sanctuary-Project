@@ -1,8 +1,9 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { clearDevBypass } from "../lib/auth";
+import { signOut } from "../lib/auth";
+import { storageGet, storageSet } from "../lib/sanctuaryStorage";
 import { SideNavBar } from "../components/dashboard/SideNavBar";
-import { CalendarAIWidget } from "../components/calendar/CalendarAIWidget";
+import { useRegisterAISanctuary } from "../context/AISanctuaryContext";
 
 const WEEKDAYS = ["SUN", "MON", "TUE", "WED", "THU", "FRI", "SAT"] as const;
 
@@ -44,7 +45,7 @@ function dateKeyFromParts(y: number, m: number, d: number): string {
 
 function loadEvents(): CalendarEvent[] {
   try {
-    const raw = localStorage.getItem(STORAGE_EVENTS);
+    const raw = storageGet(STORAGE_EVENTS);
     if (!raw) return [];
     const p = JSON.parse(raw) as CalendarEvent[];
     return Array.isArray(p) ? p : [];
@@ -71,7 +72,7 @@ function migrateTask(raw: unknown): CalendarTask | null {
 
 function loadTasks(): CalendarTask[] {
   try {
-    const raw = localStorage.getItem(STORAGE_TASKS);
+    const raw = storageGet(STORAGE_TASKS);
     if (!raw) return [];
     const p = JSON.parse(raw) as unknown[];
     if (!Array.isArray(p)) return [];
@@ -85,7 +86,7 @@ type MilestoneItem = { id: string; title: string };
 
 function loadMilestones(): MilestoneItem[] {
   try {
-    const raw = localStorage.getItem(STORAGE_MILESTONES);
+    const raw = storageGet(STORAGE_MILESTONES);
     if (raw) {
       const p = JSON.parse(raw) as unknown;
       if (Array.isArray(p)) {
@@ -100,7 +101,7 @@ function loadMilestones(): MilestoneItem[] {
         return items;
       }
     }
-    const legacy = localStorage.getItem(STORAGE_MILESTONE_LEGACY);
+    const legacy = storageGet(STORAGE_MILESTONE_LEGACY);
     if (legacy && legacy.trim()) {
       return [{ id: `ms-legacy-${Date.now()}`, title: legacy.trim() }];
     }
@@ -165,7 +166,7 @@ export function CalendarPage() {
   const [milestoneEditDraft, setMilestoneEditDraft] = useState("");
   const [collaboratorCount, setCollaboratorCount] = useState(() => {
     try {
-      const n = parseInt(localStorage.getItem(STORAGE_COLLAB) || "0", 10);
+      const n = parseInt(storageGet(STORAGE_COLLAB) || "0", 10);
       return Number.isFinite(n) && n >= 0 ? n : 0;
     } catch {
       return 0;
@@ -185,16 +186,16 @@ export function CalendarPage() {
   }, []);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_EVENTS, JSON.stringify(events));
+    storageSet(STORAGE_EVENTS, JSON.stringify(events));
   }, [events]);
 
   useEffect(() => {
-    localStorage.setItem(STORAGE_TASKS, JSON.stringify(tasks));
+    storageSet(STORAGE_TASKS, JSON.stringify(tasks));
   }, [tasks]);
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_MILESTONES, JSON.stringify(milestones));
+      storageSet(STORAGE_MILESTONES, JSON.stringify(milestones));
     } catch {
       /* ignore */
     }
@@ -202,7 +203,7 @@ export function CalendarPage() {
 
   useEffect(() => {
     try {
-      localStorage.setItem(STORAGE_COLLAB, String(collaboratorCount));
+      storageSet(STORAGE_COLLAB, String(collaboratorCount));
     } catch {
       /* ignore */
     }
@@ -260,6 +261,50 @@ export function CalendarPage() {
       }),
     [cursorDate],
   );
+
+  const addEventForAi = useCallback((title: string, dateKey: string) => {
+    setEvents((list) => [
+      ...list,
+      {
+        id: `ev-${Date.now()}`,
+        dateKey,
+        title,
+        colorIndex: list.length % EVENT_STYLES.length,
+      },
+    ]);
+  }, []);
+
+  const calendarAiContext = useMemo(
+    () =>
+      `Sanctuary Calendar — ${monthYearLabel}. ${events.length} total events. Current month shows ${eventCount} events. Tasks: ${tasks.length}. Milestones: ${milestones.length}.`,
+    [monthYearLabel, events.length, eventCount, tasks.length, milestones.length],
+  );
+
+  const calendarToolHandlers = useMemo(
+    () => ({
+      create_calendar_event: (args: Record<string, unknown>) => {
+        const title = String(args.title ?? "").trim();
+        const dateKey = String(args.dateKey ?? "").trim();
+        if (!title || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+          return "Invalid arguments: need non-empty title and dateKey as yyyy-mm-dd.";
+        }
+        addEventForAi(title, dateKey);
+        return `Created calendar event "${title}" on ${dateKey}. It appears on the grid immediately.`;
+      },
+    }),
+    [addEventForAi],
+  );
+
+  const calendarAiReg = useMemo(
+    () => ({
+      route: "/calendar",
+      label: "Sanctuary Calendar",
+      contextText: calendarAiContext,
+      toolHandlers: calendarToolHandlers,
+    }),
+    [calendarAiContext, calendarToolHandlers],
+  );
+  useRegisterAISanctuary(calendarAiReg);
 
   const openAdd = (dateKey: string) => {
     setModal({ mode: "add", dateKey });
@@ -412,17 +457,6 @@ export function CalendarPage() {
               className="rounded-full border border-white/10 px-3 py-1.5 text-xs font-bold text-slate-300 hover:bg-white/5"
             >
               Today
-            </button>
-            <button type="button" className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-white" aria-label="Notifications">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
-              </svg>
-            </button>
-            <button type="button" className="rounded-xl p-2.5 text-slate-400 transition hover:bg-white/5 hover:text-white" aria-label="Settings">
-              <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z" />
-                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={1.5} d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-              </svg>
             </button>
           </div>
         </header>
@@ -944,14 +978,12 @@ export function CalendarPage() {
         </div>
       )}
 
-      <CalendarAIWidget />
-
       <Link
         to="/"
-        onClick={() => clearDevBypass()}
+        onClick={() => signOut()}
         className="fixed bottom-8 left-8 z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-app-primary hover:underline xl:left-[calc(16rem+2rem)]"
       >
-        Sign out (preview)
+        Sign out
       </Link>
     </div>
   );
