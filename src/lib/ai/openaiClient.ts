@@ -8,10 +8,22 @@ function getProvider(): AIProvider {
   return "gemini";
 }
 
+function apiBase(): string {
+  const b = import.meta.env.VITE_API_BASE_URL;
+  return typeof b === "string" ? b.trim().replace(/\/$/, "") : "";
+}
+
 function chatCompletionUrl(provider: AIProvider): string {
-  return provider === "gemini"
-    ? "/api/gemini/chat/completions"
-    : "/api/openai/v1/chat/completions";
+  const path =
+    provider === "gemini"
+      ? "/api/gemini/chat/completions"
+      : "/api/openai/v1/chat/completions";
+  const base = apiBase();
+  if (base) return `${base}${path}`;
+  if (import.meta.env.DEV) return path;
+  throw new Error(
+    "Nocturnal AI: set VITE_API_BASE_URL in Vercel to your Render API URL (e.g. https://sanctuary-api.onrender.com).",
+  );
 }
 
 export type ChatRole = "system" | "user" | "assistant" | "tool";
@@ -66,11 +78,6 @@ export async function createChatCompletion(body: {
   tools?: unknown[];
   tool_choice?: "auto" | "none";
 }): Promise<ChatCompletionResponse> {
-  if (!import.meta.env.DEV) {
-    throw new Error(
-      "AI proxy is only configured for `npm run dev`. Deploy a small API route for production, or run the dev server.",
-    );
-  }
   const provider = getProvider();
   const res = await fetch(chatCompletionUrl(provider), {
     method: "POST",
@@ -93,7 +100,7 @@ export async function createChatCompletion(body: {
         : undefined);
     const hint =
       res.status === 401 || res.status === 403
-        ? ` (${provider === "gemini" ? "check GEMINI_API_KEY in .env and restart npm run dev; key must not use the VITE_ prefix" : "check OPENAI_API_KEY and VITE_AI_PROVIDER=openai"})`
+        ? ` (${provider === "gemini" ? "check GEMINI_API_KEY on Render (or .env for local dev)" : "check OPENAI_API_KEY on Render and VITE_AI_PROVIDER=openai"})`
         : "";
     throw new Error((msg || text || `AI HTTP ${res.status}`) + hint);
   }

@@ -5,6 +5,8 @@ interface ImportMetaEnv {
   readonly VITE_ENABLE_AUTH_BYPASS?: string;
   /** OpenWeatherMap API key — https://openweathermap.org/api */
   readonly VITE_OPENWEATHER_API_KEY?: string;
+  /** Production: Render (or other) API origin, no trailing slash — e.g. https://sanctuary-api.onrender.com */
+  readonly VITE_API_BASE_URL?: string;
   /** Google OAuth Web client ID — Gmail API + Identity Services */
   readonly VITE_GOOGLE_CLIENT_ID?: string;
   /** `gemini` | `openai` — must match which server-side key you set (GEMINI_API_KEY vs OPENAI_API_KEY). */

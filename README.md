@@ -19,6 +19,10 @@ npm run dev
 
 Open the URL shown in the terminal (usually `http://localhost:5173`).
 
+### Deploy (Vercel + Render)
+
+Step-by-step checklist for a public site (static app on **Vercel**, AI proxy on **Render**): see **[docs/DEPLOY.md](./docs/DEPLOY.md)**.
+
 ### Nocturnal AI (Google Gemini or OpenAI)
 
 The **Nocturnal AI** panel (bottom-right on every app page except sign-in) uses **function calling** so it can answer questions and perform in-app actions (calendar events, note search, compose drafts, fitness routine rows, quote shuffle, etc.).
