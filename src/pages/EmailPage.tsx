@@ -456,10 +456,10 @@ export function EmailPage() {
     <div className="min-h-screen bg-[#0a0e14] font-manrope text-slate-100 antialiased">
       <SideNavBar />
 
-      <div className="flex min-h-screen pl-64">
+      <div className="flex min-h-screen flex-col pl-0 pt-14 lg:flex-row lg:pl-64 lg:pt-0">
         {/* Pane 2 — Inbox */}
-        <aside className="sticky top-0 flex h-screen w-80 shrink-0 flex-col border-r border-white/5 bg-[#0a0e14]">
-          <div className="border-b border-white/5 p-6">
+        <aside className="flex max-h-[min(44vh,400px)] w-full shrink-0 flex-col overflow-y-auto border-b border-white/5 bg-[#0a0e14] lg:sticky lg:top-0 lg:max-h-none lg:h-screen lg:w-80 lg:border-b-0 lg:border-r">
+          <div className="border-b border-white/5 p-4 sm:p-6">
             <div className="flex flex-wrap items-start justify-between gap-3">
               <h1 className="text-2xl font-extrabold tracking-tighter text-white md:text-3xl">
                 Sanctuary Inbox
@@ -548,7 +548,7 @@ export function EmailPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 pb-6">
+          <div className="flex-1 overflow-y-auto px-4 pb-6 sm:px-6">
             <div className="mb-4 flex items-end justify-between gap-2">
               <h2 className="text-xs font-bold uppercase tracking-[0.2em] text-[#f1f3fc]/40">
                 Inbox
@@ -687,8 +687,8 @@ export function EmailPage() {
         </aside>
 
         {/* Pane 3 — Reader */}
-        <div className="relative flex min-h-screen min-w-0 flex-1 flex-col bg-[#0a0e14]">
-          <div className="flex shrink-0 flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-[#0a0e14]/95 px-6 py-4 backdrop-blur-xl md:px-8">
+        <div className="relative flex min-h-[55vh] min-w-0 flex-1 flex-col bg-[#0a0e14] lg:min-h-screen">
+          <div className="flex shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-[#0a0e14]/95 px-4 py-3 backdrop-blur-xl sm:gap-4 sm:px-6 sm:py-4 md:px-8">
             <div className="flex flex-wrap items-center gap-2">
               <ToolbarIcon
                 label="Archive"
@@ -783,7 +783,7 @@ export function EmailPage() {
             </div>
           </div>
 
-          <div className="flex-1 overflow-y-auto px-6 py-8 md:px-8 md:pb-8">
+          <div className="flex-1 overflow-y-auto px-4 py-6 sm:px-6 sm:py-8 md:px-8 md:pb-8">
             {!accessToken && (
               <EmptyReaderIcon />
             )}
@@ -798,7 +798,7 @@ export function EmailPage() {
 
             {accessToken && selectedId && fullBody && !loadingBody && (
               <>
-                <h2 className="text-[36px] font-bold leading-tight tracking-tight text-[#f1f3fc]">
+                <h2 className="text-2xl font-bold leading-tight tracking-tight text-[#f1f3fc] sm:text-3xl md:text-[36px]">
                   {fullBody.subject}
                 </h2>
 
@@ -836,7 +836,7 @@ export function EmailPage() {
             )}
           </div>
 
-          <div className="sticky bottom-0 border-t border-white/5 bg-[#151a21]/80 px-6 py-4 backdrop-blur-xl md:px-8">
+          <div className="sticky bottom-0 border-t border-white/5 bg-[#151a21]/80 px-4 py-3 backdrop-blur-xl sm:px-6 sm:py-4 md:px-8">
             <div className="flex items-center gap-3 rounded-xl border border-white/10 bg-[#0c1016] px-4 py-3">
               <input
                 type="text"
@@ -888,7 +888,7 @@ export function EmailPage() {
       <Link
         to="/"
         onClick={() => signOut()}
-        className="fixed bottom-8 left-[calc(16rem+20rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline max-lg:left-8 max-lg:bottom-36"
+        className="fixed bottom-6 left-4 z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline sm:bottom-8 lg:left-[calc(16rem+20rem+2rem)] lg:bottom-8"
       >
         Sign out
       </Link>

@@ -342,10 +342,10 @@ export function FitnessPage() {
     <div className="min-h-screen bg-[#0a0e14] font-sans text-slate-100 antialiased">
       <SideNavBar />
 
-      <div className="flex min-h-screen pl-64">
+      <div className="min-h-screen pl-0 pt-14 lg:pl-64 lg:pt-0">
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-6 border-b border-white/5 bg-[#0a0e14]/90 px-8 backdrop-blur-xl">
-            <p className="text-2xl font-bold tracking-tight text-white">Fitness Sanctuary</p>
+          <header className="sticky top-0 z-20 flex min-h-16 shrink-0 flex-wrap items-center gap-3 border-b border-white/5 bg-[#0a0e14]/90 px-4 py-3 backdrop-blur-xl sm:gap-6 sm:px-8">
+            <p className="text-lg font-bold tracking-tight text-white sm:text-2xl">Fitness Sanctuary</p>
             {sessionActive && (
               <div
                 className="flex items-center gap-2 rounded-full border border-app-primary/40 bg-app-primary/10 px-4 py-1.5 font-mono text-sm font-bold tabular-nums text-app-primary shadow-[0_0_20px_rgba(41,98,255,0.35)]"
@@ -360,12 +360,12 @@ export function FitnessPage() {
             )}
           </header>
 
-          <div className="space-y-8 p-8 pb-40">
+          <div className="space-y-6 p-4 pb-36 sm:space-y-8 sm:p-6 sm:pb-40 lg:p-8">
             <header className="max-w-6xl">
-              <h1 className="text-[3.75rem] font-bold leading-[1.05] tracking-tighter text-[#f1f3fc] md:text-6xl">
+              <h1 className="text-4xl font-bold leading-[1.05] tracking-tighter text-[#f1f3fc] sm:text-5xl md:text-6xl lg:text-[3.75rem]">
                 Fitness Sanctuary
               </h1>
-              <p className="mt-4 max-w-2xl text-lg leading-relaxed text-[#f1f3fc]/80">
+              <p className="mt-3 max-w-2xl text-base leading-relaxed text-[#f1f3fc]/80 sm:mt-4 sm:text-lg">
                 Elevate your physical existence. Precision tracking meets elite performance within your
                 digital safe haven.
               </p>
@@ -835,7 +835,7 @@ export function FitnessPage() {
       <Link
         to="/"
         onClick={() => signOut()}
-        className="fixed bottom-8 left-[calc(16rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 hover:text-app-primary hover:underline max-md:left-4"
+        className="fixed bottom-6 left-4 z-30 text-xs font-semibold text-slate-500 underline-offset-4 hover:text-app-primary hover:underline sm:bottom-8 lg:left-[calc(16rem+2rem)] lg:bottom-8"
       >
         Sign out
       </Link>

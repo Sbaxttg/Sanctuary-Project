@@ -68,7 +68,7 @@ function useNowTick(everyMs: number) {
 function LargeQuoteDecoration() {
   return (
     <span
-      className="mb-8 block text-center font-serif text-[4.5rem] font-light leading-none text-[#94aaff]/35"
+      className="mb-6 block text-center font-serif text-[2.75rem] font-light leading-none text-[#94aaff]/35 sm:mb-8 sm:text-[3.5rem] md:text-[4.5rem]"
       aria-hidden
     >
       &ldquo;
@@ -193,11 +193,11 @@ export function HomePage() {
     <div className="min-h-screen bg-[#0a0e14] font-manrope text-slate-100 antialiased">
       <SideNavBar />
 
-      <div className="pl-64">
-        <main className="p-8 pb-40">
+      <div className="pl-0 pt-14 lg:pl-64 lg:pt-0">
+        <main className="min-w-0 px-4 py-6 pb-36 sm:px-6 sm:py-8 sm:pb-40 lg:px-8">
           <div className="mb-10 flex flex-col gap-2">
             <p className="text-[10px] font-bold uppercase tracking-[0.35em] text-slate-500">Dashboard</p>
-            <h1 className="text-3xl font-extrabold tracking-tighter text-white md:text-4xl">
+            <h1 className="text-2xl font-extrabold tracking-tighter text-white sm:text-3xl md:text-4xl">
               Wall of Wisdom
             </h1>
           </div>
@@ -206,7 +206,7 @@ export function HomePage() {
             <div>
               <p className="text-[11px] font-bold uppercase tracking-[0.28em] text-slate-500">Current atmosphere</p>
               <p
-                className="mt-1 text-7xl font-bold leading-none tracking-tight text-[#f1f3fc] md:text-8xl"
+                className="mt-1 text-5xl font-bold leading-none tracking-tight text-[#f1f3fc] sm:text-6xl md:text-7xl lg:text-8xl"
                 style={{ fontFeatureSettings: '"tnum"' }}
               >
                 {timeStr}
@@ -338,7 +338,7 @@ export function HomePage() {
       <Link
         to="/"
         onClick={() => signOut()}
-        className="fixed bottom-8 left-[calc(16rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline max-lg:left-8 max-lg:bottom-32"
+        className="fixed bottom-6 left-4 z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline sm:bottom-8 lg:left-[calc(16rem+2rem)] lg:bottom-8"
       >
         Sign out
       </Link>

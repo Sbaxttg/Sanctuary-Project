@@ -33,7 +33,7 @@ export function OmniAIPanel() {
       <button
         type="button"
         onClick={() => setOpen(true)}
-        className="fixed bottom-8 right-8 z-[100] flex h-14 w-14 items-center justify-center rounded-2xl border border-white/10 bg-[#151a21]/80 text-[#2962FF] shadow-[0_0_28px_rgba(41,98,255,0.35)] backdrop-blur-xl transition hover:border-[#2962FF]/40"
+        className="fixed bottom-4 right-4 z-[100] flex h-12 w-12 items-center justify-center rounded-2xl border border-white/10 bg-[#151a21]/80 text-[#2962FF] shadow-[0_0_28px_rgba(41,98,255,0.35)] backdrop-blur-xl transition hover:border-[#2962FF]/40 sm:bottom-8 sm:right-8 sm:h-14 sm:w-14"
         aria-label="Open Nocturnal AI"
       >
         <SparkleIcon />
@@ -44,7 +44,7 @@ export function OmniAIPanel() {
   return (
     <>
       <aside
-        className="fixed bottom-8 right-8 z-[100] flex w-[min(22rem,calc(100vw-2rem))] max-h-[min(560px,calc(100vh-5rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#151a21]/80 shadow-[0_32px_64px_-15px_rgba(0,0,0,0.65)] backdrop-blur-xl"
+        className="fixed bottom-4 right-4 z-[100] flex w-[min(22rem,calc(100vw-1rem))] max-h-[min(520px,calc(100dvh-5.5rem))] flex-col overflow-hidden rounded-2xl border border-white/10 bg-[#151a21]/80 shadow-[0_32px_64px_-15px_rgba(0,0,0,0.65)] backdrop-blur-xl sm:bottom-8 sm:right-8 sm:w-[min(22rem,calc(100vw-2rem))] sm:max-h-[min(560px,calc(100vh-5rem))]"
         aria-label="Nocturnal AI assistant"
       >
         <div className="flex items-start justify-between border-b border-white/10 px-4 py-3">

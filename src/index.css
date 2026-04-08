@@ -22,6 +22,7 @@ body {
   -moz-osx-font-smoothing: grayscale;
   background-color: #0a0e14;
   color: #f8fafc;
+  overflow-x: hidden;
 }
 
 /* Design-system checkbox — primary #2962FF */

@@ -204,9 +204,9 @@ export function NotesPage() {
     <div className="min-h-screen bg-[#0a0e14] font-manrope text-slate-100 antialiased">
       <SideNavBar />
 
-      <div className="flex min-h-screen pl-64">
+      <div className="flex min-h-screen flex-col pl-0 pt-14 lg:flex-row lg:pl-64 lg:pt-0">
         {/* Column 2 — Notes sidebar */}
-        <aside className="sticky top-0 flex h-screen w-80 shrink-0 flex-col border-r border-white/5 bg-[#0a0e14]">
+        <aside className="flex max-h-[min(42vh,380px)] w-full shrink-0 flex-col overflow-y-auto border-b border-white/5 bg-[#0a0e14] lg:sticky lg:top-0 lg:max-h-none lg:h-screen lg:w-80 lg:border-b-0 lg:border-r">
           <div className="flex gap-1 border-b border-white/5 p-3">
             <button
               type="button"
@@ -393,9 +393,9 @@ export function NotesPage() {
         </aside>
 
         {/* Column 3 — Editor */}
-        <div className="relative flex min-h-screen min-w-0 flex-1 flex-col bg-[#0a0e14]">
-          <header className="sticky top-0 z-20 grid h-16 shrink-0 grid-cols-[1fr_minmax(0,28rem)_1fr] items-center gap-4 border-b border-white/5 bg-[#0a0e14]/90 px-6 backdrop-blur-xl md:px-8">
-            <div aria-hidden className="min-w-0" />
+        <div className="relative flex min-h-[60vh] min-w-0 flex-1 flex-col bg-[#0a0e14] lg:min-h-screen">
+          <header className="sticky top-0 z-20 flex min-h-14 flex-col justify-center gap-2 border-b border-white/5 bg-[#0a0e14]/90 px-4 py-3 backdrop-blur-xl sm:grid sm:h-16 sm:grid-cols-[1fr_minmax(0,28rem)_1fr] sm:items-center sm:gap-4 sm:px-6 md:px-8">
+            <div aria-hidden className="hidden min-w-0 sm:block" />
             <div className="flex w-full items-center gap-3 rounded-xl border border-white/10 bg-[#151a21]/80 px-4 py-2 backdrop-blur-xl">
               <svg
                 className="h-5 w-5 shrink-0 text-slate-500"
@@ -418,10 +418,10 @@ export function NotesPage() {
                 className="min-w-0 flex-1 bg-transparent text-sm font-medium text-[#f1f3fc] placeholder:text-slate-500 outline-none"
               />
             </div>
-            <div aria-hidden className="min-w-0" />
+            <div aria-hidden className="hidden min-w-0 sm:block" />
           </header>
 
-          <div className="relative flex flex-1 flex-col px-8 pb-28 pt-6">
+          <div className="relative flex flex-1 flex-col px-4 pb-28 pt-4 sm:px-6 sm:pt-6 md:px-8">
             {selectedNote && (
               <div className="sticky top-4 z-10 mb-6 flex justify-center">
                 <NotesEditorToolbar editorRef={editorRef} />
@@ -451,7 +451,7 @@ export function NotesPage() {
                   value={selectedNote.title}
                   onChange={(e) => updateNote(selectedNote.id, { title: e.target.value })}
                   placeholder="Untitled Note"
-                  className="w-full border-none bg-transparent text-[2.5rem] font-bold leading-[1.05] tracking-tight text-[#f1f3fc] placeholder:text-slate-600 outline-none md:text-6xl"
+                  className="w-full border-none bg-transparent text-3xl font-bold leading-[1.05] tracking-tight text-[#f1f3fc] placeholder:text-slate-600 outline-none sm:text-4xl md:text-5xl lg:text-6xl"
                 />
 
                 {selectedNote.tags.length > 0 && (
@@ -479,7 +479,7 @@ export function NotesPage() {
             )}
           </div>
 
-          <footer className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-4 border-t border-white/5 bg-[#151a21]/80 px-8 py-3 text-[11px] font-semibold uppercase tracking-wider text-slate-500 backdrop-blur-xl">
+          <footer className="sticky bottom-0 z-20 flex flex-wrap items-center justify-between gap-3 border-t border-white/5 bg-[#151a21]/80 px-4 py-3 text-[10px] font-semibold uppercase tracking-wider text-slate-500 backdrop-blur-xl sm:gap-4 sm:px-8 sm:text-[11px]">
             <span>
               {selectedNote ? `Edited ${formatRelativeTime(selectedNote.updatedAt)}` : "No note selected"}
             </span>
@@ -502,7 +502,7 @@ export function NotesPage() {
       <Link
         to="/"
         onClick={() => signOut()}
-        className="fixed bottom-8 left-[calc(16rem+20rem+2rem)] z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline max-lg:left-8 max-lg:bottom-36"
+        className="fixed bottom-6 left-4 z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-[#2962FF] hover:underline sm:bottom-8 lg:left-[calc(16rem+20rem+2rem)] lg:bottom-8"
       >
         Sign out
       </Link>

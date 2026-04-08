@@ -432,8 +432,8 @@ export function CalendarPage() {
     <div className="min-h-screen bg-[#0a0e14] font-sans text-slate-100 antialiased">
       <SideNavBar />
 
-      <div className="flex min-h-screen flex-col pl-64">
-        <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center justify-between gap-6 border-b border-white/5 bg-[#0a0e14]/80 px-8 backdrop-blur-xl">
+      <div className="flex min-h-screen flex-col pl-0 pt-14 lg:pl-64 lg:pt-0">
+        <header className="sticky top-0 z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-[#0a0e14]/80 px-4 py-3 backdrop-blur-xl sm:gap-6 sm:px-8">
           <div className="flex min-w-0 flex-wrap items-baseline gap-3">
             <h1 className="text-lg font-bold tracking-tight text-white">Sanctuary Calendar</h1>
             <span className="text-sm font-medium text-slate-500">{monthYearLabel}</span>
@@ -461,13 +461,15 @@ export function CalendarPage() {
           </div>
         </header>
 
-        <div className="flex flex-1 flex-col gap-8 p-8 pb-40 xl:flex-row">
+        <div className="flex flex-1 flex-col gap-6 p-4 pb-36 sm:gap-8 sm:p-6 sm:pb-40 xl:flex-row xl:p-8">
           <div className="min-w-0 flex-1 space-y-8">
             <section className="rounded-3xl border border-white/5 bg-[#151a21] p-6 shadow-[0_32px_64px_-20px_rgba(0,0,0,0.5)] md:p-8">
               <div className="flex flex-col gap-6 md:flex-row md:items-start md:justify-between">
                 <div className="flex flex-wrap items-center gap-4">
                   <div>
-                    <h2 className="text-4xl font-bold tracking-tight text-white">Monthly Schedule</h2>
+                    <h2 className="text-2xl font-bold tracking-tight text-white sm:text-3xl md:text-4xl">
+                      Monthly Schedule
+                    </h2>
                     <p className="mt-2 text-sm font-medium text-slate-500">
                       {eventCount === 0
                         ? "No events scheduled this month yet."
@@ -981,7 +983,7 @@ export function CalendarPage() {
       <Link
         to="/"
         onClick={() => signOut()}
-        className="fixed bottom-8 left-8 z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-app-primary hover:underline xl:left-[calc(16rem+2rem)]"
+        className="fixed bottom-6 left-4 z-30 text-xs font-semibold text-slate-500 underline-offset-4 transition hover:text-app-primary hover:underline sm:bottom-8 xl:left-[calc(16rem+2rem)] xl:bottom-8"
       >
         Sign out
       </Link>

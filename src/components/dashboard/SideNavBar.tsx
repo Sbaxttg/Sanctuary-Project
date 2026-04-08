@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { NavLink } from "react-router-dom";
+import { NavLink, useLocation } from "react-router-dom";
 import { getPublicProfile, SANCTUARY_PROFILE_CHANGED } from "../../lib/auth";
 import { useProfileModal } from "../../context/ProfileModalContext";
 import { ProfileAvatar } from "./ProfileAvatar";
@@ -47,6 +47,22 @@ function FitnessIcon() {
   );
 }
 
+function MenuIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 6h16M4 12h16M4 18h16" />
+    </svg>
+  );
+}
+
+function CloseMenuIcon() {
+  return (
+    <svg className="h-5 w-5" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden>
+      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+    </svg>
+  );
+}
+
 const navItemClass = (isActive: boolean) =>
   [
     "group relative flex w-full items-center gap-3 rounded-xl py-3 pl-3 pr-4 text-left text-[14px] font-semibold transition-colors",
@@ -75,6 +91,8 @@ const fitnessNavClass = (isActive: boolean) =>
 export function SideNavBar() {
   const [profile, setProfile] = useState(() => getPublicProfile());
   const { openProfile } = useProfileModal();
+  const [mobileOpen, setMobileOpen] = useState(false);
+  const location = useLocation();
 
   useEffect(() => {
     const bump = () => setProfile(getPublicProfile());
@@ -82,8 +100,48 @@ export function SideNavBar() {
     return () => window.removeEventListener(SANCTUARY_PROFILE_CHANGED, bump);
   }, []);
 
+  useEffect(() => {
+    setMobileOpen(false);
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (!mobileOpen) return;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => {
+      document.body.style.overflow = prev;
+    };
+  }, [mobileOpen]);
+
   return (
-    <aside className="fixed left-0 top-0 z-30 flex h-screen w-64 flex-col border-r border-white/5 bg-[#0f141a]">
+    <>
+      <button
+        type="button"
+        className="fixed left-3 top-3 z-[60] flex h-11 w-11 items-center justify-center rounded-xl border border-white/10 bg-[#0f141a]/95 text-slate-200 shadow-lg backdrop-blur-xl lg:hidden"
+        aria-expanded={mobileOpen}
+        aria-controls="sanctuary-main-nav"
+        onClick={() => setMobileOpen((o) => !o)}
+        aria-label={mobileOpen ? "Close navigation menu" : "Open navigation menu"}
+      >
+        {mobileOpen ? <CloseMenuIcon /> : <MenuIcon />}
+      </button>
+
+      {mobileOpen && (
+        <button
+          type="button"
+          className="fixed inset-0 z-[55] bg-black/60 backdrop-blur-[2px] lg:hidden"
+          aria-label="Close navigation menu"
+          onClick={() => setMobileOpen(false)}
+        />
+      )}
+
+      <aside
+        id="sanctuary-main-nav"
+        className={[
+          "fixed left-0 top-0 z-[56] flex h-[100dvh] w-[min(17rem,86vw)] flex-col border-r border-white/5 bg-[#0f141a] transition-transform duration-200 ease-out lg:z-30 lg:w-64 lg:translate-x-0",
+          mobileOpen ? "translate-x-0 shadow-[8px_0_32px_rgba(0,0,0,0.45)]" : "-translate-x-full lg:translate-x-0",
+        ].join(" ")}
+      >
       <div className="px-6 pt-8">
         <h1 className="text-2xl font-extrabold tracking-tight text-sky-50">The Sanctuary</h1>
         <p className="mt-2 text-[10px] font-bold uppercase tracking-[0.35em] text-slate-500">
@@ -190,5 +248,6 @@ export function SideNavBar() {
         </button>
       </div>
     </aside>
+    </>
   );
 }

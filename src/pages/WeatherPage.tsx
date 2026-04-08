@@ -244,9 +244,9 @@ export function WeatherPage() {
     <div className="min-h-screen bg-[#0a0e14] font-sans text-slate-100 antialiased">
       <SideNavBar />
 
-      <div className="flex min-h-screen pl-64">
+      <div className="flex min-h-screen flex-col pl-0 pt-14 lg:flex-row lg:pl-64 lg:pt-0">
         <div className="min-w-0 flex-1">
-          <header className="sticky top-0 z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-4 border-b border-white/5 bg-[#0a0e14]/90 px-4 py-3 backdrop-blur-xl md:px-8">
+          <header className="sticky top-0 z-20 flex min-h-16 shrink-0 flex-wrap items-center justify-between gap-3 border-b border-white/5 bg-[#0a0e14]/90 px-4 py-3 backdrop-blur-xl md:px-8">
             <h1 className="text-2xl font-bold tracking-tight text-white">Sanctuary Forecast</h1>
             <div className="flex w-full flex-1 flex-wrap items-center justify-end gap-2 md:gap-4 lg:max-w-2xl">
               <div className="flex min-w-0 flex-1 items-center gap-2 rounded-xl border border-white/10 bg-[#0c1016] px-3 py-2 md:px-4">
@@ -329,25 +329,25 @@ export function WeatherPage() {
             </div>
           )}
           {loading && (
-            <div className="border-b border-white/5 px-8 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500">
+            <div className="border-b border-white/5 px-4 py-2 text-xs font-semibold uppercase tracking-wider text-slate-500 md:px-8">
               Loading forecast…
             </div>
           )}
 
-          <div className="space-y-8 p-8 pb-24">
-            <section className="overflow-hidden rounded-[2rem] border border-white/5 bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-8 shadow-deep md:p-10">
+          <div className="space-y-6 p-4 pb-20 sm:space-y-8 sm:p-6 sm:pb-24 lg:p-8">
+            <section className="overflow-hidden rounded-2xl border border-white/5 bg-gradient-to-br from-[#1e293b] to-[#0f172a] p-5 shadow-deep sm:rounded-[2rem] sm:p-8 md:p-10">
               <div className="mb-6 inline-flex rounded-full border border-white/10 bg-black/20 px-4 py-1.5 text-[10px] font-bold uppercase tracking-[0.2em] text-slate-400">
                 Live conditions
               </div>
               <div className="flex flex-col gap-10 lg:flex-row lg:items-start lg:justify-between">
                 <div className="min-w-0 flex-1">
-                  <h2 className="text-5xl font-bold tracking-tight text-white md:text-6xl">
+                  <h2 className="text-xl font-bold leading-tight tracking-tight text-white sm:text-3xl md:text-5xl lg:text-6xl">
                     {bundle ? `${bundle.current.cityName}, ${bundle.current.country}` : "—"}
                   </h2>
-                  <p className="mt-3 text-xl font-semibold text-slate-400">
+                  <p className="mt-3 text-base font-semibold text-slate-400 sm:text-lg md:text-xl">
                     {bundle ? formatLocalDate(bundle.current.dt, bundle.current.timezone) : "Search a city to begin"}
                   </p>
-                  <p className="mt-2 text-9xl font-bold leading-none tracking-tighter text-white md:text-[10rem]">
+                  <p className="mt-2 text-6xl font-bold leading-none tracking-tighter text-white sm:text-7xl md:text-8xl lg:text-9xl xl:text-[10rem]">
                     {bundle ? `${Math.round(bundle.current.tempF)}°F` : "—"}
                   </p>
                 </div>
@@ -366,7 +366,7 @@ export function WeatherPage() {
                   </p>
                 </div>
               </div>
-              <div className="mt-10 grid grid-cols-3 gap-6 border-t border-white/10 pt-8">
+              <div className="mt-8 grid grid-cols-1 gap-4 border-t border-white/10 pt-6 sm:grid-cols-3 sm:gap-6 sm:pt-8">
                 <div>
                   <p className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider text-slate-500">
                     <span className="text-sky-400">◇</span> Wind
@@ -480,14 +480,14 @@ export function WeatherPage() {
         </aside>
       </div>
 
-      <div className="border-t border-white/5 bg-[#0a0e14] p-8 xl:hidden">
+      <div className="border-t border-white/5 bg-[#0a0e14] p-4 sm:p-8 xl:hidden">
         <AirQualityPanel air={bundle?.air ?? null} compact />
       </div>
 
       <Link
         to="/"
         onClick={() => signOut()}
-        className="fixed bottom-8 left-8 z-30 text-xs font-semibold text-slate-500 underline-offset-4 hover:text-app-primary hover:underline xl:left-[calc(16rem+2rem)]"
+        className="fixed bottom-6 left-4 z-30 text-xs font-semibold text-slate-500 underline-offset-4 hover:text-app-primary hover:underline sm:bottom-8 xl:left-[calc(16rem+2rem)] xl:bottom-8"
       >
         Sign out
       </Link>
